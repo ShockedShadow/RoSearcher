@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -20,26 +19,30 @@
             <button id="searchBtn">Search</button>
         </div>
 
-        <div id="loader" class="hidden">Searching database...</div>
+        <div id="loader" class="hidden">Scanning Roblox databases...</div>
         <div id="errorContainer" class="hidden"></div>
 
         <div id="profileContainer" class="hidden">
             <div class="profile-header">
                 <img id="userAvatar" src="" alt="Avatar">
-                <div>
-                    <h2 id="displayName"></h2>
+                <div class="profile-titles">
+                    <div class="name-row">
+                        <h2 id="displayName"></h2>
+                        <span id="verifiedBadge" class="hidden" title="Verified User">✔</span>
+                    </div>
                     <p id="userName"></p>
                     <span id="onlineStatus" class="offline">Offline</span>
                 </div>
             </div>
 
+            <!-- Core Stats Grid -->
             <div class="stats-grid">
                 <div class="stat-card">
                     <h3>Account Created</h3>
                     <p id="createdDate">-</p>
                 </div>
                 <div class="stat-card">
-                    <h3>Last Online</h3>
+                    <h3>Last Online / Location</h3>
                     <p id="lastOnline">-</p>
                 </div>
                 <div class="stat-card">
@@ -47,12 +50,12 @@
                     <p id="followersCount">-</p>
                 </div>
                 <div class="stat-card">
-                    <h3>Following</h3>
-                    <p id="followingCount">-</p>
-                </div>
-                <div class="stat-card">
                     <h3>Friends</h3>
                     <p id="friendsCount">-</p>
+                </div>
+                <div class="stat-card">
+                    <h3>Avatar Rig Type</h3>
+                    <p id="rigType">-</p>
                 </div>
                 <div class="stat-card">
                     <h3>Total Place Visits</h3>
@@ -60,9 +63,26 @@
                 </div>
             </div>
 
-            <div class="details-section">
-                <h3>Last Game Played</h3>
-                <p id="lastGame">Unable to fetch (Privacy restricted or offline)</p>
+            <!-- Extra Extracted Info Modules -->
+            <div class="extra-modules">
+                <div class="details-section">
+                    <h3>Previous Usernames</h3>
+                    <p id="pastUsernames" class="sub-text">None found</p>
+                </div>
+
+                <div class="details-section">
+                    <h3>Top Groups</h3>
+                    <div id="groupsList" class="tag-container">
+                        <span class="sub-text">No groups found</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="details-section full-width">
+                <h3>Public Experiences / Games</h3>
+                <div id="gamesContainer" class="games-grid">
+                    <span class="sub-text">No public games found</span>
+                </div>
             </div>
         </div>
     </div>
