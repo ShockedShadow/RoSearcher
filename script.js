@@ -4,11 +4,10 @@ const loader = document.getElementById('loader');
 const errorContainer = document.getElementById('errorContainer');
 const profileContainer = document.getElementById('profileContainer');
 
-// Three.js Global Variables for 3D Viewport
 let scene, camera, renderer, avatarMesh;
 let isDragging = false;
 let previousMousePosition = { x: 0, y: 0 };
-let targetRotationVelocity = 0.003; // Base auto-spin speed
+let targetRotationVelocity = 0.003;
 let currentRotationVelocity = 0.003;
 
 searchBtn.addEventListener('click', performSearch);
@@ -16,44 +15,35 @@ usernameInput.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') performSearch();
 });
 
-// Initialize 3D Viewport Canvas
 function init3DViewer(imageUrl) {
     const container = document.getElementById('canvasContainer');
-    container.innerHTML = ''; // Clear previous canvas if any
+    container.innerHTML = '';
 
     scene = new THREE.Scene();
     camera = new THREE.PerspectiveCamera(45, 1, 0.1, 1000);
     camera.position.z = 2.7;
 
     renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setSize(220, 220);
+    renderer.setSize(210, 210);
     renderer.setPixelRatio(window.devicePixelRatio);
     container.appendChild(renderer.domElement);
 
-    // Create a sleek rounded avatar display card mesh in 3D space
     const geometry = new THREE.PlaneGeometry(2.1, 2.1, 32, 32);
-    
     const textureLoader = new THREE.TextureLoader();
     textureLoader.crossOrigin = 'anonymous';
     
     textureLoader.load(imageUrl, (texture) => {
-        const material = new THREE.MeshBasicMaterial({ 
-            map: texture, 
-            transparent: true,
-            side: THREE.DoubleSide
-        });
+        const material = new THREE.MeshBasicMaterial({ map: texture, transparent: true, side: THREE.DoubleSide });
         avatarMesh = new THREE.Mesh(geometry, material);
         scene.add(avatarMesh);
         animate3D();
     }, undefined, () => {
-        // Fallback placeholder if texture fails
         const material = new THREE.MeshBasicMaterial({ color: 0x6366f1 });
         avatarMesh = new THREE.Mesh(geometry, material);
         scene.add(avatarMesh);
         animate3D();
     });
 
-    // Mouse / Touch Event Listeners for 3D Interaction
     container.addEventListener('mousedown', (e) => {
         isDragging = true;
         previousMousePosition = { x: e.clientX, y: e.clientY };
@@ -66,16 +56,12 @@ function init3DViewer(imageUrl) {
 
         avatarMesh.rotation.y += deltaX * 0.01;
         avatarMesh.rotation.x += deltaY * 0.01;
-
-        currentRotationVelocity = deltaX * 0.0005; // Transfer momentum
+        currentRotationVelocity = deltaX * 0.0005;
         previousMousePosition = { x: e.clientX, y: e.clientY };
     });
 
-    window.addEventListener('mouseup', () => {
-        isDragging = false;
-    });
+    window.addEventListener('mouseup', () => { isDragging = false; });
 
-    // Touch support for mobile devices
     container.addEventListener('touchstart', (e) => {
         isDragging = true;
         previousMousePosition = { x: e.touches[0].clientX, y: e.touches[0].clientY };
@@ -88,25 +74,19 @@ function init3DViewer(imageUrl) {
 
         avatarMesh.rotation.y += deltaX * 0.01;
         avatarMesh.rotation.x += deltaY * 0.01;
-
         currentRotationVelocity = deltaX * 0.0005;
         previousMousePosition = { x: e.touches[0].clientX, y: e.touches[0].clientY };
     });
 
-    window.addEventListener('touchend', () => {
-        isDragging = false;
-    });
+    window.addEventListener('touchend', () => { isDragging = false; });
 }
 
 function animate3D() {
     requestAnimationFrame(animate3D);
     if (avatarMesh) {
         if (!isDragging) {
-            // Gradually return momentum to the slow default auto-spin
             currentRotationVelocity += (targetRotationVelocity - currentRotationVelocity) * 0.05;
             avatarMesh.rotation.y += currentRotationVelocity;
-            
-            // Gently level out the X axis rotation over time if twisted
             avatarMesh.rotation.x *= 0.95;
         }
     }
@@ -130,7 +110,7 @@ async function performSearch() {
         const userData = await userLookupRes.json();
 
         if (!userData.data || userData.data.length === 0) {
-            throw new Error('Roblox user not found!');
+            throw new Error('Target user profile not located in database.');
         }
 
         const userId = userData.data[0].id;
@@ -138,15 +118,8 @@ async function performSearch() {
         const name = userData.data[0].name;
 
         const [
-            profileRes,
-            avatarRes,
-            followersRes,
-            friendsRes,
-            presenceRes,
-            usernameHistoryRes,
-            avatarRigRes,
-            groupsRes,
-            gamesRes
+            profileRes, avatarRes, followersRes, friendsRes,
+            presenceRes, usernameHistoryRes, avatarRigRes, groupsRes, gamesRes
         ] = await Promise.all([
             fetch(`https://users.roblox.com/v1/users/${userId}`),
             fetch(`https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=${userId}&size=420x420&format=Png&isCircular=false`),
@@ -183,7 +156,6 @@ async function performSearch() {
             badgeEl.classList.add('hidden');
         }
 
-        // Initialize 3D Rotating Avatar Viewport
         let avatarUrl = 'https://tr.rbxcdn.com/30day-avatar/420/420/AvatarHeadshot/Png';
         if (avatar.data && avatar.data.length > 0) {
             avatarUrl = avatar.data[0].imageUrl;
@@ -191,7 +163,7 @@ async function performSearch() {
         init3DViewer(avatarUrl);
 
         const createdDate = new Date(profile.created).toLocaleDateString(undefined, {
-            year: 'numeric', month: 'long', day: 'numeric'
+            year: 'numeric', month: 'short', day: 'numeric'
         });
         document.getElementById('createdDate').textContent = createdDate;
 
@@ -205,28 +177,28 @@ async function performSearch() {
 
         if (userPresence) {
             if (userPresence.userPresenceType > 0) {
-                statusEl.textContent = userPresence.userPresenceType === 2 ? 'In Game' : 'Online';
-                statusEl.className = 'online';
-                lastOnlineEl.textContent = userPresence.lastLocation ? `Playing: ${userPresence.lastLocation}` : 'Active on Website';
+                statusEl.textContent = userPresence.userPresenceType === 2 ? 'IN-GAME' : 'ONLINE';
+                statusEl.className = 'status-pill online';
+                lastOnlineEl.textContent = userPresence.lastLocation ? `Playing: ${userPresence.lastLocation}` : 'Active on Web';
             } else {
-                statusEl.textContent = 'Offline';
-                statusEl.className = 'offline';
-                lastOnlineEl.textContent = userPresence.lastOnline ? new Date(userPresence.lastOnline).toLocaleString() : 'Hidden';
+                statusEl.textContent = 'OFFLINE';
+                statusEl.className = 'status-pill offline';
+                lastOnlineEl.textContent = userPresence.lastOnline ? new Date(userPresence.lastOnline).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Restricted';
             }
         }
 
         const pastNamesContainer = document.getElementById('pastUsernames');
         if (usernameHistory.data && usernameHistory.data.length > 0) {
-            pastNamesContainer.innerHTML = usernameHistory.data.map(item => `<span class="tag">${item.name}</span>`).join(' ');
+            pastNamesContainer.innerHTML = usernameHistory.data.map(item => `<span class="tag">${item.name}</span>`).join('');
         } else {
-            pastNamesContainer.innerHTML = '<span class="sub-text">No recorded username changes</span>';
+            pastNamesContainer.innerHTML = '<span class="empty-hint">No past aliases detected</span>';
         }
 
         const groupsContainer = document.getElementById('groupsList');
         if (groups.data && groups.data.length > 0) {
             groupsContainer.innerHTML = groups.data.slice(0, 4).map(g => `<span class="tag" title="${g.role.name}">${g.group.name}</span>`).join('');
         } else {
-            groupsContainer.innerHTML = '<span class="sub-text">No public groups</span>';
+            groupsContainer.innerHTML = '<span class="empty-hint">No public organizations</span>';
         }
 
         let totalVisits = 0;
@@ -235,14 +207,14 @@ async function performSearch() {
             gamesContainer.innerHTML = games.data.map(game => {
                 totalVisits += game.placeVisits || 0;
                 return `
-                    <div class="game-card">
+                    <div class="exp-card">
                         <h4>${game.name}</h4>
                         <p>Visits: ${(game.placeVisits || 0).toLocaleString()}</p>
                     </div>
                 `;
             }).join('');
         } else {
-            gamesContainer.innerHTML = '<span class="sub-text">No public games found</span>';
+            gamesContainer.innerHTML = '<span class="empty-hint">No public developer experiences found</span>';
         }
         document.getElementById('placeVisits').textContent = totalVisits.toLocaleString();
 
@@ -251,7 +223,7 @@ async function performSearch() {
 
     } catch (err) {
         loader.classList.add('hidden');
-        errorContainer.textContent = err.message || 'An error occurred while fetching user data.';
+        errorContainer.textContent = err.message || 'Telemetry scan failed. Please verify the username.';
         errorContainer.classList.remove('hidden');
     }
 }
