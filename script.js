@@ -93,7 +93,6 @@ function animate3D() {
     renderer.render(scene, camera);
 }
 
-// Reliable proxy using corsproxy.io which handles POST and headers cleanly
 async function robloxFetch(url, options = {}) {
     const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
     const response = await fetch(proxyUrl, options);
@@ -110,28 +109,21 @@ async function performSearch() {
     profileContainer.classList.add('hidden');
 
     try {
-        // Step 1: Lookup User ID via POST endpoint through corsproxy.io
-        const lookupUrl = `https://users.roblox.com/v1/usernames/users`;
-        const proxyLookupUrl = `https://corsproxy.io/?${encodeURIComponent(lookupUrl)}`;
-        
-        const userLookupRes = await fetch(proxyLookupUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ usernames: [username], excludeBannedUsers: false })
-        });
-        
-        if (!userLookupRes.ok) throw new Error('Failed to resolve username.');
-        const userData = await userLookupRes.json();
+        // Use Roblox's multi-search endpoint via GET to avoid POST proxy blocks
+        const lookupUrl = `https://users.roblox.com/v1/users/search?keyword=${encodeURIComponent(username)}&limit=10`;
+        const searchResult = await robloxFetch(lookupUrl);
 
-        if (!userData.data || userData.data.length === 0) {
+        if (!searchResult.data || searchResult.data.length === 0) {
             throw new Error('Target user profile not located in database.');
         }
 
-        const userId = userData.data[0].id;
-        const displayName = userData.data[0].displayName;
-        const name = userData.data[0].name;
+        // Find exact match case-insensitively, or fall back to the first search result
+        const matchedUser = searchResult.data.find(u => u.name.toLowerCase() === username.toLowerCase()) || searchResult.data[0];
+        const userId = matchedUser.id;
+        const displayName = matchedUser.displayName;
+        const name = matchedUser.name;
 
-        // Step 2: Fetch extended stats safely using parallel requests
+        // Fetch remaining profile telemetry in parallel
         const [
             profile, avatar, followers, friends,
             presence, usernameHistory, avatarRig, groups, games
