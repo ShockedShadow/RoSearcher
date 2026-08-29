@@ -93,9 +93,9 @@ function animate3D() {
     renderer.render(scene, camera);
 }
 
-// Helper wrapper to safely fetch Roblox APIs via a reliable CORS proxy
+// Reliable proxy using corsproxy.io which handles POST and headers cleanly
 async function robloxFetch(url, options = {}) {
-    const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+    const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
     const response = await fetch(proxyUrl, options);
     if (!response.ok) throw new Error('API connection rejected.');
     return await response.json();
@@ -110,11 +110,11 @@ async function performSearch() {
     profileContainer.classList.add('hidden');
 
     try {
-        // Step 1: Lookup User ID via Roblox POST endpoint wrapped in JSON payload
+        // Step 1: Lookup User ID via POST endpoint through corsproxy.io
         const lookupUrl = `https://users.roblox.com/v1/usernames/users`;
-        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(lookupUrl)}`;
+        const proxyLookupUrl = `https://corsproxy.io/?${encodeURIComponent(lookupUrl)}`;
         
-        const userLookupRes = await fetch(proxyUrl, {
+        const userLookupRes = await fetch(proxyLookupUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ usernames: [username], excludeBannedUsers: false })
@@ -131,7 +131,7 @@ async function performSearch() {
         const displayName = userData.data[0].displayName;
         const name = userData.data[0].name;
 
-        // Step 2: Fetch extended stats safely using standard GET requests through the proxy
+        // Step 2: Fetch extended stats safely using parallel requests
         const [
             profile, avatar, followers, friends,
             presence, usernameHistory, avatarRig, groups, games
