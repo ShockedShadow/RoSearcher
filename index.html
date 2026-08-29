@@ -6,8 +6,10 @@
     <title>RoSearcher | Advanced Roblox Stalker</title>
     <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
+    <div class="ambient-glow"></div>
     <div class="container">
         <header>
             <h1>Ro<span>Searcher</span></h1>
@@ -19,55 +21,64 @@
             <button id="searchBtn">Search</button>
         </div>
 
-        <div id="loader" class="hidden">Scanning Roblox databases...</div>
+        <div id="loader" class="hidden">
+            <div class="spinner"></div>
+            <p>Scanning Roblox databases...</p>
+        </div>
         <div id="errorContainer" class="hidden"></div>
 
         <div id="profileContainer" class="hidden">
-            <div class="profile-header">
-                <img id="userAvatar" src="" alt="Avatar">
-                <div class="profile-titles">
-                    <div class="name-row">
-                        <h2 id="displayName"></h2>
-                        <span id="verifiedBadge" class="hidden" title="Verified User">✔</span>
+            <div class="profile-layout-grid">
+                <div class="avatar-viewport-card">
+                    <h3>3D Avatar Viewport</h3>
+                    <p class="hint">Click & drag to rotate freely</p>
+                    <div id="canvasContainer"></div>
+                    <div class="profile-mini-info">
+                        <div class="name-row">
+                            <h2 id="displayName"></h2>
+                            <span id="verifiedBadge" class="hidden" title="Verified User">✔</span>
+                        </div>
+                        <p id="userName"></p>
+                        <span id="onlineStatus" class="offline">Offline</span>
                     </div>
-                    <p id="userName"></p>
-                    <span id="onlineStatus" class="offline">Offline</span>
+                </div>
+
+                <div class="stats-column">
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <h3>Account Created</h3>
+                            <p id="createdDate">-</p>
+                        </div>
+                        <div class="stat-card">
+                            <h3>Last Online / Location</h3>
+                            <p id="lastOnline">-</p>
+                        </div>
+                        <div class="stat-card">
+                            <h3>Followers</h3>
+                            <p id="followersCount">-</p>
+                        </div>
+                        <div class="stat-card">
+                            <h3>Friends</h3>
+                            <p id="friendsCount">-</p>
+                        </div>
+                        <div class="stat-card">
+                            <h3>Avatar Rig Type</h3>
+                            <p id="rigType">-</p>
+                        </div>
+                        <div class="stat-card">
+                            <h3>Total Place Visits</h3>
+                            <p id="placeVisits">-</p>
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            <!-- Core Stats Grid -->
-            <div class="stats-grid">
-                <div class="stat-card">
-                    <h3>Account Created</h3>
-                    <p id="createdDate">-</p>
-                </div>
-                <div class="stat-card">
-                    <h3>Last Online / Location</h3>
-                    <p id="lastOnline">-</p>
-                </div>
-                <div class="stat-card">
-                    <h3>Followers</h3>
-                    <p id="followersCount">-</p>
-                </div>
-                <div class="stat-card">
-                    <h3>Friends</h3>
-                    <p id="friendsCount">-</p>
-                </div>
-                <div class="stat-card">
-                    <h3>Avatar Rig Type</h3>
-                    <p id="rigType">-</p>
-                </div>
-                <div class="stat-card">
-                    <h3>Total Place Visits</h3>
-                    <p id="placeVisits">-</p>
-                </div>
-            </div>
-
-            <!-- Extra Extracted Info Modules -->
             <div class="extra-modules">
                 <div class="details-section">
                     <h3>Previous Usernames</h3>
-                    <p id="pastUsernames" class="sub-text">None found</p>
+                    <div id="pastUsernames" class="tag-container">
+                        <span class="sub-text">None found</span>
+                    </div>
                 </div>
 
                 <div class="details-section">
