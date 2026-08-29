@@ -1,1 +1,72 @@
 
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RoSearcher | Advanced Roblox Stalker</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Ro<span>Searcher</span></h1>
+            <p>Deep-dive into any Roblox user profile instantly.</p>
+        </header>
+
+        <div class="search-box">
+            <input type="text" id="usernameInput" placeholder="Enter Roblox Username...">
+            <button id="searchBtn">Search</button>
+        </div>
+
+        <div id="loader" class="hidden">Searching database...</div>
+        <div id="errorContainer" class="hidden"></div>
+
+        <div id="profileContainer" class="hidden">
+            <div class="profile-header">
+                <img id="userAvatar" src="" alt="Avatar">
+                <div>
+                    <h2 id="displayName"></h2>
+                    <p id="userName"></p>
+                    <span id="onlineStatus" class="offline">Offline</span>
+                </div>
+            </div>
+
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <h3>Account Created</h3>
+                    <p id="createdDate">-</p>
+                </div>
+                <div class="stat-card">
+                    <h3>Last Online</h3>
+                    <p id="lastOnline">-</p>
+                </div>
+                <div class="stat-card">
+                    <h3>Followers</h3>
+                    <p id="followersCount">-</p>
+                </div>
+                <div class="stat-card">
+                    <h3>Following</h3>
+                    <p id="followingCount">-</p>
+                </div>
+                <div class="stat-card">
+                    <h3>Friends</h3>
+                    <p id="friendsCount">-</p>
+                </div>
+                <div class="stat-card">
+                    <h3>Total Place Visits</h3>
+                    <p id="placeVisits">-</p>
+                </div>
+            </div>
+
+            <div class="details-section">
+                <h3>Last Game Played</h3>
+                <p id="lastGame">Unable to fetch (Privacy restricted or offline)</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
