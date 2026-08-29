@@ -93,13 +93,6 @@ function animate3D() {
     renderer.render(scene, camera);
 }
 
-async function robloxFetch(url, options = {}) {
-    const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
-    const response = await fetch(proxyUrl, options);
-    if (!response.ok) throw new Error('API connection rejected.');
-    return await response.json();
-}
-
 async function performSearch() {
     const username = usernameInput.value.trim();
     if (!username) return;
@@ -109,38 +102,42 @@ async function performSearch() {
     profileContainer.classList.add('hidden');
 
     try {
-        // Use Roblox's multi-search endpoint via GET to avoid POST proxy blocks
-        const lookupUrl = `https://users.roblox.com/v1/users/search?keyword=${encodeURIComponent(username)}&limit=10`;
-        const searchResult = await robloxFetch(lookupUrl);
+        // Step 1: Lookup User ID via RoProxy (replacing roblox.com with roproxy.com)
+        const lookupRes = await fetch(`https://users.roproxy.com/v1/usernames/users`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ usernames: [username], excludeBannedUsers: false })
+        });
+        
+        if (!lookupRes.ok) throw new Error('Failed to connect to Roblox user database.');
+        const userData = await lookupRes.json();
 
-        if (!searchResult.data || searchResult.data.length === 0) {
+        if (!userData.data || userData.data.length === 0) {
             throw new Error('Target user profile not located in database.');
         }
 
-        // Find exact match case-insensitively, or fall back to the first search result
-        const matchedUser = searchResult.data.find(u => u.name.toLowerCase() === username.toLowerCase()) || searchResult.data[0];
-        const userId = matchedUser.id;
-        const displayName = matchedUser.displayName;
-        const name = matchedUser.name;
+        const userId = userData.data[0].id;
+        const displayName = userData.data[0].displayName;
+        const name = userData.data[0].name;
 
-        // Fetch remaining profile telemetry in parallel
+        // Step 2: Fetch profile metrics in parallel using RoProxy domains
         const [
             profile, avatar, followers, friends,
             presence, usernameHistory, avatarRig, groups, games
         ] = await Promise.all([
-            robloxFetch(`https://users.roblox.com/v1/users/${userId}`),
-            robloxFetch(`https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=${userId}&size=420x420&format=Png&isCircular=false`),
-            robloxFetch(`https://friends.roblox.com/v1/users/${userId}/followers/count`),
-            robloxFetch(`https://friends.roblox.com/v1/users/${userId}/friends/count`),
-            robloxFetch(`https://presence.roblox.com/v1/presence/users`, {
+            fetch(`https://users.roproxy.com/v1/users/${userId}`).then(r => r.json()),
+            fetch(`https://thumbnails.roproxy.com/v1/users/avatar-headshot?userIds=${userId}&size=420x420&format=Png&isCircular=false`).then(r => r.json()),
+            fetch(`https://friends.roproxy.com/v1/users/${userId}/followers/count`).then(r => r.json()),
+            fetch(`https://friends.roproxy.com/v1/users/${userId}/friends/count`).then(r => r.json()),
+            fetch(`https://presence.roproxy.com/v1/presence/users`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ userIds: [userId] })
-            }),
-            robloxFetch(`https://users.roblox.com/v1/users/${userId}/username-history`),
-            robloxFetch(`https://avatar.roblox.com/v2/avatar/users/${userId}/avatar`),
-            robloxFetch(`https://groups.roblox.com/v1/users/${userId}/groups/roles`),
-            robloxFetch(`https://games.roblox.com/v1/users/${userId}/games?limit=6`)
+            }).then(r => r.json()),
+            fetch(`https://users.roproxy.com/v1/users/${userId}/username-history`).then(r => r.json()),
+            fetch(`https://avatar.roproxy.com/v2/avatar/users/${userId}/avatar`).then(r => r.json()),
+            fetch(`https://groups.roproxy.com/v1/users/${userId}/groups/roles`).then(r => r.json()),
+            fetch(`https://games.roproxy.com/v1/users/${userId}/games?limit=6`).then(r => r.json())
         ]);
 
         document.getElementById('displayName').textContent = displayName;
