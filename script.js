@@ -93,6 +93,14 @@ function animate3D() {
     renderer.render(scene, camera);
 }
 
+// Helper wrapper to safely fetch Roblox APIs via a reliable CORS proxy
+async function robloxFetch(url, options = {}) {
+    const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+    const response = await fetch(proxyUrl, options);
+    if (!response.ok) throw new Error('API connection rejected.');
+    return await response.json();
+}
+
 async function performSearch() {
     const username = usernameInput.value.trim();
     if (!username) return;
@@ -102,11 +110,17 @@ async function performSearch() {
     profileContainer.classList.add('hidden');
 
     try {
-        const userLookupRes = await fetch(`https://users.roblox.com/v1/usernames/users`, {
+        // Step 1: Lookup User ID via Roblox POST endpoint wrapped in JSON payload
+        const lookupUrl = `https://users.roblox.com/v1/usernames/users`;
+        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(lookupUrl)}`;
+        
+        const userLookupRes = await fetch(proxyUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ usernames: [username], excludeBannedUsers: false })
         });
+        
+        if (!userLookupRes.ok) throw new Error('Failed to resolve username.');
         const userData = await userLookupRes.json();
 
         if (!userData.data || userData.data.length === 0) {
@@ -117,34 +131,25 @@ async function performSearch() {
         const displayName = userData.data[0].displayName;
         const name = userData.data[0].name;
 
+        // Step 2: Fetch extended stats safely using standard GET requests through the proxy
         const [
-            profileRes, avatarRes, followersRes, friendsRes,
-            presenceRes, usernameHistoryRes, avatarRigRes, groupsRes, gamesRes
+            profile, avatar, followers, friends,
+            presence, usernameHistory, avatarRig, groups, games
         ] = await Promise.all([
-            fetch(`https://users.roblox.com/v1/users/${userId}`),
-            fetch(`https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=${userId}&size=420x420&format=Png&isCircular=false`),
-            fetch(`https://friends.roblox.com/v1/users/${userId}/followers/count`),
-            fetch(`https://friends.roblox.com/v1/users/${userId}/friends/count`),
-            fetch(`https://presence.roblox.com/v1/presence/users`, {
+            robloxFetch(`https://users.roblox.com/v1/users/${userId}`),
+            robloxFetch(`https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=${userId}&size=420x420&format=Png&isCircular=false`),
+            robloxFetch(`https://friends.roblox.com/v1/users/${userId}/followers/count`),
+            robloxFetch(`https://friends.roblox.com/v1/users/${userId}/friends/count`),
+            robloxFetch(`https://presence.roblox.com/v1/presence/users`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ userIds: [userId] })
             }),
-            fetch(`https://users.roblox.com/v1/users/${userId}/username-history`),
-            fetch(`https://avatar.roblox.com/v2/avatar/users/${userId}/avatar`),
-            fetch(`https://groups.roblox.com/v1/users/${userId}/groups/roles`),
-            fetch(`https://games.roblox.com/v1/users/${userId}/games?limit=6`)
+            robloxFetch(`https://users.roblox.com/v1/users/${userId}/username-history`),
+            robloxFetch(`https://avatar.roblox.com/v2/avatar/users/${userId}/avatar`),
+            robloxFetch(`https://groups.roblox.com/v1/users/${userId}/groups/roles`),
+            robloxFetch(`https://games.roblox.com/v1/users/${userId}/games?limit=6`)
         ]);
-
-        const profile = await profileRes.json();
-        const avatar = await avatarRes.json();
-        const followers = await followersRes.json();
-        const friends = await friendsRes.json();
-        const presence = await presenceRes.json();
-        const usernameHistory = await usernameHistoryRes.json();
-        const avatarRig = await avatarRigRes.json();
-        const groups = await groupsRes.json();
-        const games = await gamesRes.json();
 
         document.getElementById('displayName').textContent = displayName;
         document.getElementById('userName').textContent = `@${name}`;
