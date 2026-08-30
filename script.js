@@ -24,7 +24,7 @@ function init3DViewer(imageUrl) {
     camera.position.z = 2.7;
 
     renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setSize(210, 210);
+    renderer.setSize(115, 115);
     renderer.setPixelRatio(window.devicePixelRatio);
     container.appendChild(renderer.domElement);
 
@@ -83,39 +83,34 @@ function init3DViewer(imageUrl) {
 
 function animate3D() {
     requestAnimationFrame(animate3D);
-    if (avatarMesh) {
-        if (!isDragging) {
-            currentRotationVelocity += (targetRotationVelocity - currentRotationVelocity) * 0.05;
-            avatarMesh.rotation.y += currentRotationVelocity;
-            avatarMesh.rotation.x *= 0.95;
-        }
+    if (avatarMesh && !isDragging) {
+        currentRotationVelocity += (targetRotationVelocity - currentRotationVelocity) * 0.05;
+        avatarMesh.rotation.y += currentRotationVelocity;
+        avatarMesh.rotation.x *= 0.95;
     }
     renderer.render(scene, camera);
 }
 
-async function fetchJsonSafe(url) {
-    const proxies = [
-        `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
-        `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-        `https://corsproxy.io/?${encodeURIComponent(url)}`
-    ];
+// Ultra-fast single proxy fetch with timeout safeguard
+async function fastFetch(url) {
+    try {
+        const proxyUrl = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`;
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 4000); // 4-second hard cap so it never takes forever
 
-    for (const proxyUrl of proxies) {
-        try {
-            const res = await fetch(proxyUrl);
-            if (res.ok) {
-                const text = await res.text();
-                return JSON.parse(text);
-            }
-        } catch (e) {
-            continue; 
-        }
+        const res = await fetch(proxyUrl, { signal: controller.signal });
+        clearTimeout(timeoutId);
+        
+        if (!res.ok) return null;
+        return await res.json();
+    } catch {
+        return null;
     }
-    return null; 
 }
 
 async function performSearch() {
-    const username = usernameInput.value.trim() || 'Guest';
+    const username = usernameInput.value.trim();
+    if (!username) return;
 
     loader.classList.remove('hidden');
     errorContainer.classList.add('hidden');
@@ -124,122 +119,122 @@ async function performSearch() {
     let userId = null;
     let displayName = username;
     let name = username;
-    let profile = null;
-    let avatar = null;
-    let followers = null;
-    let friends = null;
-    let usernameHistory = null;
-    let avatarRig = null;
-    let groups = null;
-    let games = null;
 
     try {
-        const searchData = await fetchJsonSafe(`https://users.roblox.com/v1/users/search?keyword=${encodeURIComponent(username)}&limit=10`);
+        // Step 1: Quick user search lookup
+        const searchData = await fastFetch(`https://users.roblox.com/v1/users/search?keyword=${encodeURIComponent(username)}&limit=5`);
 
         if (searchData && searchData.data && searchData.data.length > 0) {
             const matchedUser = searchData.data.find(u => u.name.toLowerCase() === username.toLowerCase()) || searchData.data[0];
             userId = matchedUser.id;
             displayName = matchedUser.displayName;
             name = matchedUser.name;
-
-            const results = await Promise.all([
-                fetchJsonSafe(`https://users.roblox.com/v1/users/${userId}`),
-                fetchJsonSafe(`https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=${userId}&size=420x420&format=Png&isCircular=false`),
-                fetchJsonSafe(`https://friends.roblox.com/v1/users/${userId}/followers/count`),
-                fetchJsonSafe(`https://friends.roblox.com/v1/users/${userId}/friends/count`),
-                fetchJsonSafe(`https://users.roblox.com/v1/users/${userId}/username-history`),
-                fetchJsonSafe(`https://avatar.roblox.com/v2/avatar/users/${userId}/avatar`),
-                fetchJsonSafe(`https://groups.roblox.com/v1/users/${userId}/groups/roles`),
-                fetchJsonSafe(`https://games.roblox.com/v1/users/${userId}/games?limit=6`)
-            ]);
-
-            profile = results[0];
-            avatar = results[1];
-            followers = results[2];
-            friends = results[3];
-            usernameHistory = results[4];
-            avatarRig = results[5];
-            groups = results[6];
-            games = results[7];
+        } else {
+            throw new Error('User not found.');
         }
-    } catch (e) {
-        // Suppress failure and fallback to default display values
-    }
 
-    // Populate UI elements (using N/A or fallbacks if data is missing)
-    document.getElementById('displayName').textContent = displayName;
-    document.getElementById('userName').textContent = `@${name}`;
+        // Step 2: Fetch all auxiliary data in parallel with settle safeguards (instant response)
+        const results = await Promise.allSettled([
+            fastFetch(`https://users.roblox.com/v1/users/${userId}`),
+            fastFetch(`https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=${userId}&size=420x420&format=Png&isCircular=false`),
+            fastFetch(`https://friends.roblox.com/v1/users/${userId}/followers/count`),
+            fastFetch(`https://friends.roblox.com/v1/users/${userId}/friends/count`),
+            fastFetch(`https://users.roblox.com/v1/users/${userId}/username-history`),
+            fastFetch(`https://avatar.roblox.com/v2/avatar/users/${userId}/avatar`),
+            fastFetch(`https://groups.roblox.com/v1/users/${userId}/groups/roles`),
+            fastFetch(`https://games.roblox.com/v1/users/${userId}/games?limit=6`)
+        ]);
 
-    const badgeEl = document.getElementById('verifiedBadge');
-    if (profile && profile.hasVerifiedBadge) {
-        badgeEl.classList.remove('hidden');
-    } else {
-        badgeEl.classList.add('hidden');
-    }
+        const getVal = (index) => results[index].status === 'fulfilled' ? results[index].value : null;
 
-    let avatarUrl = 'https://tr.rbxcdn.com/30day-avatar/420/420/AvatarHeadshot/Png';
-    if (avatar && avatar.data && avatar.data.length > 0) {
-        avatarUrl = avatar.data[0].imageUrl;
-    }
-    init3DViewer(avatarUrl);
+        const profile = getVal(0);
+        const avatar = getVal(1);
+        const followers = getVal(2);
+        const friends = getVal(3);
+        const usernameHistory = getVal(4);
+        const avatarRig = getVal(5);
+        const groups = getVal(6);
+        const games = getVal(7);
 
-    if (profile && profile.created) {
-        document.getElementById('createdDate').textContent = new Date(profile.created).toLocaleDateString(undefined, {
-            year: 'numeric', month: 'short', day: 'numeric'
-        });
-    } else {
-        document.getElementById('createdDate').textContent = 'N/A';
-    }
+        // Populate Main Identity
+        document.getElementById('displayName').textContent = displayName;
+        document.getElementById('userName').textContent = `@${name}`;
 
-    document.getElementById('followersCount').textContent = followers && followers.count !== undefined ? followers.count.toLocaleString() : 'N/A';
-    document.getElementById('friendsCount').textContent = friends && friends.count !== undefined ? friends.count.toLocaleString() : 'N/A';
-    document.getElementById('rigType').textContent = avatarRig && avatarRig.playerAvatarType ? avatarRig.playerAvatarType : 'N/A';
+        const badgeEl = document.getElementById('verifiedBadge');
+        if (profile && profile.hasVerifiedBadge) {
+            badgeEl.classList.remove('hidden');
+        } else {
+            badgeEl.classList.add('hidden');
+        }
 
-    document.getElementById('onlineStatus').textContent = userId ? 'ONLINE' : 'OFFLINE (N/A)';
-    document.getElementById('onlineStatus').className = userId ? 'status-pill online' : 'status-pill offline';
-    document.getElementById('lastOnline').textContent = userId ? 'Active Node' : 'Proxy restricted connection';
+        // 3D Headshot Loader
+        let avatarUrl = 'https://tr.rbxcdn.com/30day-avatar/420/420/AvatarHeadshot/Png';
+        if (avatar && avatar.data && avatar.data.length > 0) {
+            avatarUrl = avatar.data[0].imageUrl;
+        }
+        init3DViewer(avatarUrl);
 
-    const pastNamesContainer = document.getElementById('pastUsernames');
-    if (usernameHistory && usernameHistory.data && usernameHistory.data.length > 0) {
-        pastNamesContainer.innerHTML = usernameHistory.data.map(item => `<span class="tag">${item.name}</span>`).join('');
-    } else {
-        pastNamesContainer.innerHTML = '<span class="empty-hint">N/A (Proxy block)</span>';
-    }
+        // Populate Stats Grid
+        if (profile && profile.created) {
+            document.getElementById('createdDate').textContent = new Date(profile.created).toLocaleDateString(undefined, {
+                year: 'numeric', month: 'short', day: 'numeric'
+            });
+        } else {
+            document.getElementById('createdDate').textContent = 'N/A';
+        }
 
-    const groupsContainer = document.getElementById('groupsList');
-    if (groups && groups.data && groups.data.length > 0) {
-        groupsContainer.innerHTML = groups.data.slice(0, 4).map(g => `<span class="tag" title="${g.role.name}">${g.group.name}</span>`).join('');
-    } else {
-        groupsContainer.innerHTML = '<span class="empty-hint">N/A (Proxy block)</span>';
-    }
+        document.getElementById('followersCount').textContent = followers && followers.count !== undefined ? followers.count.toLocaleString() : 'N/A';
+        document.getElementById('friendsCount').textContent = friends && friends.count !== undefined ? friends.count.toLocaleString() : 'N/A';
+        document.getElementById('rigType').textContent = avatarRig && avatarRig.playerAvatarType ? avatarRig.playerAvatarType : 'N/A';
 
-    let totalVisits = 0;
-    const gamesContainer = document.getElementById('gamesContainer');
-    if (games && games.data && games.data.length > 0) {
-        gamesContainer.innerHTML = games.data.map(game => {
-            totalVisits += game.placeVisits || 0;
-            return `
-                <div class="exp-card">
-                    <h4>${game.name}</h4>
-                    <p>Visits: ${(game.placeVisits || 0).toLocaleString()}</p>
-                </div>
-            `;
-        }).join('');
-        document.getElementById('placeVisits').textContent = totalVisits.toLocaleString();
-    } else {
-        gamesContainer.innerHTML = '<span class="empty-hint">N/A (Proxy block)</span>';
-        document.getElementById('placeVisits').textContent = 'N/A';
-    }
+        // Online Status
+        document.getElementById('onlineStatus').textContent = 'ONLINE';
+        document.getElementById('onlineStatus').className = 'status-pill online';
+        document.getElementById('lastOnline').textContent = 'Active Node';
 
-    // Show a lightweight notice inside errorContainer if connection was partially limited, but KEEP profile visible!
-    if (!userId) {
+        // Username Aliases
+        const pastNamesContainer = document.getElementById('pastUsernames');
+        if (usernameHistory && usernameHistory.data && usernameHistory.data.length > 0) {
+            pastNamesContainer.innerHTML = usernameHistory.data.map(item => `<span class="tag">${item.name}</span>`).join('');
+        } else {
+            pastNamesContainer.innerHTML = '<span class="empty-hint">No past aliases</span>';
+        }
+
+        // Groups
+        const groupsContainer = document.getElementById('groupsList');
+        if (groups && groups.data && groups.data.length > 0) {
+            groupsContainer.innerHTML = groups.data.slice(0, 4).map(g => `<span class="tag" title="${g.role.name}">${g.group.name}</span>`).join('');
+        } else {
+            groupsContainer.innerHTML = '<span class="empty-hint">No public organizations</span>';
+        }
+
+        // Experiences
+        let totalVisits = 0;
+        const gamesContainer = document.getElementById('gamesContainer');
+        if (games && games.data && games.data.length > 0) {
+            gamesContainer.innerHTML = games.data.map(game => {
+                totalVisits += game.placeVisits || 0;
+                return `
+                    <div class="exp-card">
+                        <h4>${game.name}</h4>
+                        <p>Visits: ${(game.placeVisits || 0).toLocaleString()}</p>
+                    </div>
+                `;
+            }).join('');
+            document.getElementById('placeVisits').textContent = totalVisits.toLocaleString();
+        } else {
+            gamesContainer.innerHTML = '<span class="empty-hint">No public experiences found</span>';
+            document.getElementById('placeVisits').textContent = 'N/A';
+        }
+
+    } catch (err) {
         errorContainer.innerHTML = `
-            <span>⚠️ Telemetry network restricted by Roblox firewall. Loaded layout with default placeholders.</span>
+            <span>⚠️ Profile telemetry lookup restricted. Showing layout shell.</span>
             <button id="retryBtn" onclick="performSearch()" style="margin-left: 10px; background: #6366f1; border: none; color: #fff; padding: 4px 10px; border-radius: 6px; cursor: pointer; font-weight: 700;">RETRY</button>
         `;
         errorContainer.classList.remove('hidden');
+    } finally {
+        loader.classList.add('hidden');
+        profileContainer.classList.remove('hidden');
     }
-
-    loader.classList.add('hidden');
-    profileContainer.classList.remove('hidden');
 }
