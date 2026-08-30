@@ -2,368 +2,610 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-    <title>RoSearcher</title>
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
 
     <meta
         name="description"
-        content="Look up public Roblox profile information, presence, groups and experiences."
+        content="RoSearcher - Roblox profile lookup and public information viewer"
     >
+
+    <title>RoSearcher</title>
 
     <link rel="stylesheet" href="style.css">
 
-    <link
-        href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
-        rel="stylesheet"
-    >
-
-    <script
-        src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"
-        defer
-    ></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 
 <body>
 
-    <div class="glow-orb glow-orb-1"></div>
-    <div class="glow-orb glow-orb-2"></div>
+<div class="background"></div>
 
-    <main class="app-container">
+<header class="site-header">
 
-        <!-- HEADER -->
-        <header class="header">
+    <div class="header-inner">
 
-            <div class="logo-badge">
-                <span class="pulse-dot"></span>
-                ONLINE
+        <a class="brand" href="./">
+            <span class="brand-mark">R</span>
+            <span>RoSearcher</span>
+        </a>
+
+        <span class="header-status">
+            ROBLOX LOOKUP
+        </span>
+
+    </div>
+
+</header>
+
+
+<main class="container">
+
+    <section class="hero">
+
+        <div class="eyebrow">
+            PUBLIC PROFILE SEARCH
+        </div>
+
+        <h1>
+            Search a Roblox user.
+        </h1>
+
+        <p>
+            View publicly available profile information,
+            groups, experiences, presence and more.
+        </p>
+
+        <div class="search">
+
+            <input
+                id="usernameInput"
+                type="text"
+                placeholder="Enter username..."
+                autocomplete="off"
+                spellcheck="false"
+            >
+
+            <button
+                id="searchBtn"
+                type="button"
+            >
+                Search
+            </button>
+
+        </div>
+
+    </section>
+
+
+    <div
+        id="loader"
+        class="loader hidden"
+    >
+        <div class="spinner"></div>
+        <span>Searching Roblox...</span>
+    </div>
+
+
+    <div
+        id="errorContainer"
+        class="error hidden"
+    ></div>
+
+
+    <section
+        id="profileContainer"
+        class="profile hidden"
+    >
+
+        <!-- ================================================= -->
+        <!-- PROFILE HEADER -->
+        <!-- ================================================= -->
+
+        <div class="profile-header card">
+
+            <div class="avatar-area">
+
+                <div
+                    id="canvasContainer"
+                    class="avatar-viewer"
+                    title="Drag to rotate"
+                ></div>
+
+                <div class="avatar-note">
+                    DRAG TO ROTATE
+                </div>
+
             </div>
 
-            <h1>RoSearcher</h1>
 
-            <p class="subtitle">
-                Roblox profile lookup
-            </p>
+            <div class="identity">
 
-            <!-- SEARCH -->
-            <div class="search-box">
+                <div class="name-line">
 
-                <input
-                    type="text"
-                    id="usernameInput"
-                    placeholder="Roblox username"
-                    autocomplete="off"
-                    spellcheck="false"
-                    maxlength="20"
-                    aria-label="Roblox username"
-                >
+                    <h2 id="displayName">
+                        Unknown
+                    </h2>
 
-                <button
-                    id="searchBtn"
-                    type="button"
-                >
-                    <span>SEARCH</span>
-
-                    <svg
-                        width="16"
-                        height="16"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2.5"
-                        aria-hidden="true"
+                    <span
+                        id="verifiedBadge"
+                        class="verified hidden"
                     >
-                        <path d="M5 12h14"></path>
-                        <path d="M12 5l7 7-7 7"></path>
-                    </svg>
-                </button>
+                        ✓
+                    </span>
+
+                </div>
+
+                <div
+                    id="userName"
+                    class="username"
+                >
+                    @Unknown
+                </div>
+
+                <div class="presence-row">
+
+                    <span
+                        id="onlineStatus"
+                        class="status-pill"
+                    >
+                        UNKNOWN
+                    </span>
+
+                    <span
+                        id="lastOnline"
+                        class="last-online"
+                    >
+                        Status unavailable
+                    </span>
+
+                </div>
+
+                <div class="profile-links">
+
+                    <a
+                        id="profileLink"
+                        href="#"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                    >
+                        Roblox Profile ↗
+                    </a>
+
+                </div>
 
             </div>
-
-        </header>
-
-
-        <!-- LOADING -->
-        <div
-            id="loader"
-            class="loader hidden"
-            aria-live="polite"
-        >
-
-            <div class="spinner-ring"></div>
-
-            <p>
-                Looking up profile...
-            </p>
 
         </div>
 
 
-        <!-- ERRORS -->
-        <div
-            id="errorContainer"
-            class="error-banner hidden"
-            role="alert"
-            aria-live="assertive"
-        ></div>
+        <!-- ================================================= -->
+        <!-- BASIC INFORMATION -->
+        <!-- ================================================= -->
 
+        <section class="section">
 
-        <!-- PROFILE -->
-        <section
-            id="profileContainer"
-            class="profile-container hidden"
-            aria-live="polite"
-        >
-
-            <!-- PROFILE HEADER -->
-            <div class="profile-top-card">
-
-                <div class="avatar-wrapper">
-
-                    <div
-                        id="canvasContainer"
-                        class="avatar-3d-box"
-                        title="Drag to rotate"
-                    ></div>
-
-                    <div class="rotate-hint">
-                        DRAG TO ROTATE
+            <div class="section-heading">
+                <div>
+                    <div class="section-label">
+                        ACCOUNT
                     </div>
 
+                    <h3>
+                        Account information
+                    </h3>
                 </div>
-
-
-                <div class="identity-info">
-
-                    <div class="name-row">
-
-                        <h2 id="displayName">
-                            Display Name
-                        </h2>
-
-                        <span
-                            id="verifiedBadge"
-                            class="verified-badge hidden"
-                            title="Verified"
-                        >
-                            ✓
-                        </span>
-
-                    </div>
-
-
-                    <p
-                        id="userName"
-                        class="username-tag"
-                    >
-                        @username
-                    </p>
-
-
-                    <div class="status-box">
-
-                        <span
-                            id="onlineStatus"
-                            class="status-pill offline"
-                        >
-                            OFFLINE
-                        </span>
-
-                        <span
-                            id="lastOnline"
-                            class="last-online-text"
-                        >
-                            Status unavailable
-                        </span>
-
-                    </div>
-
-                </div>
-
             </div>
 
 
-            <!-- STATS -->
-            <div class="stats-grid">
+            <div class="info-grid">
 
-                <div class="stat-card">
-
-                    <div class="stat-icon">
-                        📅
-                    </div>
-
-                    <div class="stat-content">
-
-                        <h3>
-                            Joined
-                        </h3>
-
-                        <p id="createdDate">
-                            N/A
-                        </p>
-
-                    </div>
-
+                <div class="info-card">
+                    <span>User ID</span>
+                    <strong id="userId">
+                        N/A
+                    </strong>
                 </div>
 
-
-                <div class="stat-card">
-
-                    <div class="stat-icon">
-                        👥
-                    </div>
-
-                    <div class="stat-content">
-
-                        <h3>
-                            Followers
-                        </h3>
-
-                        <p id="followersCount">
-                            N/A
-                        </p>
-
-                    </div>
-
+                <div class="info-card">
+                    <span>Username</span>
+                    <strong id="infoUsername">
+                        N/A
+                    </strong>
                 </div>
 
-
-                <div class="stat-card">
-
-                    <div class="stat-icon">
-                        🤝
-                    </div>
-
-                    <div class="stat-content">
-
-                        <h3>
-                            Friends
-                        </h3>
-
-                        <p id="friendsCount">
-                            N/A
-                        </p>
-
-                    </div>
-
+                <div class="info-card">
+                    <span>Display Name</span>
+                    <strong id="infoDisplayName">
+                        N/A
+                    </strong>
                 </div>
 
+                <div class="info-card">
+                    <span>Created</span>
+                    <strong id="createdDate">
+                        N/A
+                    </strong>
+                </div>
 
-                <div class="stat-card">
+                <div class="info-card">
+                    <span>Account Age</span>
+                    <strong id="accountAge">
+                        N/A
+                    </strong>
+                </div>
 
-                    <div class="stat-icon">
-                        🧊
-                    </div>
+                <div class="info-card">
+                    <span>Followers</span>
+                    <strong id="followersCount">
+                        N/A
+                    </strong>
+                </div>
 
-                    <div class="stat-content">
+                <div class="info-card">
+                    <span>Following</span>
+                    <strong id="followingCount">
+                        N/A
+                    </strong>
+                </div>
 
-                        <h3>
-                            Avatar
-                        </h3>
+                <div class="info-card">
+                    <span>Friends</span>
+                    <strong id="friendsCount">
+                        N/A
+                    </strong>
+                </div>
 
-                        <p id="rigType">
-                            N/A
-                        </p>
+                <div class="info-card">
+                    <span>Verified</span>
+                    <strong id="verifiedText">
+                        N/A
+                    </strong>
+                </div>
 
-                    </div>
-
+                <div class="info-card">
+                    <span>Avatar Rig</span>
+                    <strong id="rigType">
+                        N/A
+                    </strong>
                 </div>
 
             </div>
-
-
-            <!-- DETAILS -->
-            <div class="details-grid">
-
-                <div class="detail-card">
-
-                    <h3>
-                        Previous usernames
-                    </h3>
-
-                    <div
-                        id="pastUsernames"
-                        class="tag-container"
-                    >
-                        <span class="empty-hint">
-                            No previous usernames
-                        </span>
-                    </div>
-
-                </div>
-
-
-                <div class="detail-card">
-
-                    <h3>
-                        Groups
-                    </h3>
-
-                    <div
-                        id="groupsList"
-                        class="tag-container"
-                    >
-                        <span class="empty-hint">
-                            No public groups
-                        </span>
-                    </div>
-
-                </div>
-
-            </div>
-
-
-            <!-- EXPERIENCES -->
-            <section class="experiences-section">
-
-                <div class="exp-header">
-
-                    <h3>
-                        Experiences
-                    </h3>
-
-                    <span class="visits-label">
-                        Total Visits:
-                        <strong id="placeVisits">
-                            N/A
-                        </strong>
-                    </span>
-
-                </div>
-
-
-                <div
-                    id="gamesContainer"
-                    class="games-grid"
-                >
-                    <span class="empty-hint">
-                        No public experiences found
-                    </span>
-                </div>
-
-            </section>
 
         </section>
 
 
-        <!-- FOOTER -->
-        <footer
-            style="
-                text-align: center;
-                padding: 30px 0 10px;
-                opacity: 0.45;
-                font-size: 12px;
-            "
-        >
-            RoSearcher · Roblox profile lookup
-        </footer>
+        <!-- ================================================= -->
+        <!-- ABOUT -->
+        <!-- ================================================= -->
 
-    </main>
+        <section class="section">
+
+            <div class="section-heading">
+                <div>
+                    <div class="section-label">
+                        PROFILE
+                    </div>
+
+                    <h3>
+                        About
+                    </h3>
+                </div>
+            </div>
+
+            <div class="about-card">
+                <p id="description">
+                    No description.
+                </p>
+            </div>
+
+        </section>
 
 
-    <!-- APP SCRIPT -->
-    <script src="script.js"></script>
+        <!-- ================================================= -->
+        <!-- PRESENCE -->
+        <!-- ================================================= -->
+
+        <section class="section">
+
+            <div class="section-heading">
+
+                <div>
+                    <div class="section-label">
+                        PRESENCE
+                    </div>
+
+                    <h3>
+                        Current status
+                    </h3>
+                </div>
+
+            </div>
+
+
+            <div class="presence-grid">
+
+                <div class="info-card">
+                    <span>Status</span>
+                    <strong id="presenceStatus">
+                        Unknown
+                    </strong>
+                </div>
+
+                <div class="info-card">
+                    <span>Last location</span>
+                    <strong id="presenceLocation">
+                        N/A
+                    </strong>
+                </div>
+
+                <div class="info-card">
+                    <span>Last online</span>
+                    <strong id="presenceLastOnline">
+                        N/A
+                    </strong>
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- ================================================= -->
+        <!-- USERNAME HISTORY -->
+        <!-- ================================================= -->
+
+        <section class="section">
+
+            <div class="section-heading">
+
+                <div>
+                    <div class="section-label">
+                        HISTORY
+                    </div>
+
+                    <h3>
+                        Previous usernames
+                    </h3>
+                </div>
+
+                <button
+                    class="show-all-btn"
+                    type="button"
+                    data-target="usernameList"
+                >
+                    Show All
+                </button>
+
+            </div>
+
+            <div
+                id="usernameList"
+                class="tag-list collapsed"
+            ></div>
+
+        </section>
+
+
+        <!-- ================================================= -->
+        <!-- GROUPS -->
+        <!-- ================================================= -->
+
+        <section class="section">
+
+            <div class="section-heading">
+
+                <div>
+                    <div class="section-label">
+                        GROUPS
+                    </div>
+
+                    <h3>
+                        Groups
+                    </h3>
+                </div>
+
+                <button
+                    class="show-all-btn"
+                    type="button"
+                    data-target="groupsList"
+                >
+                    Show All
+                </button>
+
+            </div>
+
+            <div
+                id="groupsList"
+                class="groups-list collapsed"
+            ></div>
+
+        </section>
+
+
+        <!-- ================================================= -->
+        <!-- EXPERIENCES -->
+        <!-- ================================================= -->
+
+        <section class="section">
+
+            <div class="section-heading">
+
+                <div>
+                    <div class="section-label">
+                        EXPERIENCES
+                    </div>
+
+                    <h3>
+                        Created experiences
+                    </h3>
+                </div>
+
+                <button
+                    class="show-all-btn"
+                    type="button"
+                    data-target="gamesContainer"
+                >
+                    Show All
+                </button>
+
+            </div>
+
+            <div
+                id="gamesContainer"
+                class="games-grid collapsed"
+            ></div>
+
+        </section>
+
+
+        <!-- ================================================= -->
+        <!-- AVATAR DETAILS -->
+        <!-- ================================================= -->
+
+        <section class="section">
+
+            <div class="section-heading">
+
+                <div>
+                    <div class="section-label">
+                        AVATAR
+                    </div>
+
+                    <h3>
+                        Avatar information
+                    </h3>
+                </div>
+
+            </div>
+
+
+            <div class="info-grid">
+
+                <div class="info-card">
+                    <span>Avatar Type</span>
+                    <strong id="avatarType">
+                        N/A
+                    </strong>
+                </div>
+
+                <div class="info-card">
+                    <span>Scale</span>
+                    <strong id="avatarScale">
+                        N/A
+                    </strong>
+                </div>
+
+                <div class="info-card">
+                    <span>Body Colors</span>
+                    <strong id="bodyColors">
+                        N/A
+                    </strong>
+                </div>
+
+                <div class="info-card">
+                    <span>Currently Wearing</span>
+                    <strong id="wearingCount">
+                        N/A
+                    </strong>
+                </div>
+
+            </div>
+
+
+            <div
+                id="assetsList"
+                class="asset-list"
+            ></div>
+
+        </section>
+
+
+        <!-- ================================================= -->
+        <!-- LINKS -->
+        <!-- ================================================= -->
+
+        <section class="section">
+
+            <div class="section-heading">
+
+                <div>
+                    <div class="section-label">
+                        LINKS
+                    </div>
+
+                    <h3>
+                        Roblox
+                    </h3>
+                </div>
+
+            </div>
+
+
+            <div class="link-grid">
+
+                <a
+                    id="profileLinkBottom"
+                    href="#"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                >
+                    User Profile ↗
+                </a>
+
+                <a
+                    id="avatarLink"
+                    href="#"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                >
+                    Avatar ↗
+                </a>
+
+                <a
+                    id="friendsLink"
+                    href="#"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                >
+                    Friends ↗
+                </a>
+
+                <a
+                    id="followersLink"
+                    href="#"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                >
+                    Followers ↗
+                </a>
+
+                <a
+                    id="followingLink"
+                    href="#"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                >
+                    Following ↗
+                </a>
+
+            </div>
+
+        </section>
+
+    </section>
+
+</main>
+
+
+<footer>
+    RoSearcher · Uses publicly available Roblox information
+</footer>
+
+
+<script src="script.js"></script>
 
 </body>
 </html>
-
