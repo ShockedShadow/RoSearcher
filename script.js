@@ -1,4 +1,3 @@
-```js
 // ============================================================
 // ROBLOX PROFILE LOOKUP
 // GitHub Pages + Cloudflare Worker
