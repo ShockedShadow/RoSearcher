@@ -1,4 +1,3 @@
-```javascript
 // ============================================================
 // ROBLOX PROFILE LOOKUP
 // Reliable client-side version
