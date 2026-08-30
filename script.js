@@ -1,4 +1,3 @@
-```javascript
 // ============================================================
 // ROSEARCHER
 // Roblox Profile Lookup
