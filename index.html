@@ -5,33 +5,46 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>RoSearcher - Roblox Profile Telemetry</title>
     <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
+    <div class="glow-orb glow-orb-1"></div>
+    <div class="glow-orb glow-orb-2"></div>
+
     <div class="app-container">
         <header class="header">
+            <div class="logo-badge">
+                <span class="pulse-dot"></span> TELEMETRY ACTIVE
+            </div>
             <h1>RoSearcher</h1>
-            <p class="subtitle">Advanced Roblox Profile & Telemetry Inspector</p>
+            <p class="subtitle">Advanced Roblox Profile & Presence Inspector</p>
             <div class="search-box">
                 <input type="text" id="usernameInput" placeholder="Enter Roblox username..." autocomplete="off">
-                <button id="searchBtn">SCAN PROFILE</button>
+                <button id="searchBtn">
+                    <span>SCAN PROFILE</span>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                </button>
             </div>
         </header>
 
         <div id="loader" class="loader hidden">
-            <div class="spinner"></div>
-            <p>Querying Roblox telemetry nodes...</p>
+            <div class="spinner-ring"></div>
+            <p>Querying Roblox nodes securely...</p>
         </div>
 
         <div id="errorContainer" class="error-banner hidden"></div>
 
         <div id="profileContainer" class="profile-container hidden">
             <div class="profile-top-card">
-                <div id="canvasContainer" class="avatar-3d-box" title="Click and drag to rotate 3D headshot"></div>
+                <div class="avatar-wrapper">
+                    <div id="canvasContainer" class="avatar-3d-box" title="Click and drag to rotate 3D headshot"></div>
+                    <div class="rotate-hint">DRAG TO ROTATE</div>
+                </div>
                 <div class="identity-info">
                     <div class="name-row">
                         <h2 id="displayName">Display Name</h2>
-                        <span id="verifiedBadge" class="verified-badge hidden" title="Verified User">✔</span>
+                        <span id="verifiedBadge" class="verified-badge hidden" title="Verified User">✓</span>
                     </div>
                     <p id="userName" class="username-tag">@username</p>
                     <div class="status-box">
@@ -43,20 +56,32 @@
 
             <div class="stats-grid">
                 <div class="stat-card">
-                    <h3>Account Age</h3>
-                    <p id="createdDate">N/A</p>
+                    <div class="stat-icon">📅</div>
+                    <div class="stat-content">
+                        <h3>Account Age</h3>
+                        <p id="createdDate">N/A</p>
+                    </div>
                 </div>
                 <div class="stat-card">
-                    <h3>Followers</h3>
-                    <p id="followersCount">N/A</p>
+                    <div class="stat-icon">👥</div>
+                    <div class="stat-content">
+                        <h3>Followers</h3>
+                        <p id="followersCount">N/A</p>
+                    </div>
                 </div>
                 <div class="stat-card">
-                    <h3>Friends</h3>
-                    <p id="friendsCount">N/A</p>
+                    <div class="stat-icon">🤝</div>
+                    <div class="stat-content">
+                        <h3>Friends</h3>
+                        <p id="friendsCount">N/A</p>
+                    </div>
                 </div>
                 <div class="stat-card">
-                    <h3>Rig Type</h3>
-                    <p id="rigType">N/A</p>
+                    <div class="stat-icon">🧊</div>
+                    <div class="stat-content">
+                        <h3>Rig Type</h3>
+                        <p id="rigType">N/A</p>
+                    </div>
                 </div>
             </div>
 
