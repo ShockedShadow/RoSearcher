@@ -93,14 +93,15 @@ function animate3D() {
     renderer.render(scene, camera);
 }
 
-// Uses AllOrigins JSON wrapper which safely extracts the text contents regardless of CORS headers
-async function safeFetch(url, options = {}) {
-    const wrappedUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
-    const res = await fetch(wrappedUrl, options);
-    if (!res.ok) throw new Error('Network telemetry pipeline dropped.');
-    const data = await res.json();
-    if (!data.contents) throw new Error('Target node returned empty packet.');
-    return JSON.parse(data.contents);
+async function fetchJsonSafe(url) {
+    try {
+        const proxyUrl = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`;
+        const res = await fetch(proxyUrl);
+        if (!res.ok) return null;
+        return await res.json();
+    } catch {
+        return null;
+    }
 }
 
 async function performSearch() {
@@ -112,10 +113,10 @@ async function performSearch() {
     profileContainer.classList.add('hidden');
 
     try {
-        // Step 1: Lookup User ID via Roblox API search keyword endpoint (GET-safe)
-        const searchData = await safeFetch(`https://users.roblox.com/v1/users/search?keyword=${encodeURIComponent(username)}&limit=10`);
+        // Search user profile via proxy
+        const searchData = await fetchJsonSafe(`https://users.roblox.com/v1/users/search?keyword=${encodeURIComponent(username)}&limit=10`);
 
-        if (!searchData.data || searchData.data.length === 0) {
+        if (!searchData || !searchData.data || searchData.data.length === 0) {
             throw new Error('Target user profile not located in database.');
         }
 
@@ -124,68 +125,71 @@ async function performSearch() {
         const displayName = matchedUser.displayName;
         const name = matchedUser.name;
 
-        // Step 2: Fetch profile metrics in parallel safely through AllOrigins
+        // Fetch sub-telemetry points independently so partial failures don't crash the UI
         const [
             profile, avatar, followers, friends,
             usernameHistory, avatarRig, groups, games
         ] = await Promise.all([
-            safeFetch(`https://users.roblox.com/v1/users/${userId}`),
-            safeFetch(`https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=${userId}&size=420x420&format=Png&isCircular=false`),
-            safeFetch(`https://friends.roblox.com/v1/users/${userId}/followers/count`),
-            safeFetch(`https://friends.roblox.com/v1/users/${userId}/friends/count`),
-            safeFetch(`https://users.roblox.com/v1/users/${userId}/username-history`),
-            safeFetch(`https://avatar.roblox.com/v2/avatar/users/${userId}/avatar`),
-            safeFetch(`https://groups.roblox.com/v1/users/${userId}/groups/roles`),
-            safeFetch(`https://games.roblox.com/v1/users/${userId}/games?limit=6`)
+            fetchJsonSafe(`https://users.roblox.com/v1/users/${userId}`),
+            fetchJsonSafe(`https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=${userId}&size=420x420&format=Png&isCircular=false`),
+            fetchJsonSafe(`https://friends.roblox.com/v1/users/${userId}/followers/count`),
+            fetchJsonSafe(`https://friends.roblox.com/v1/users/${userId}/friends/count`),
+            fetchJsonSafe(`https://users.roblox.com/v1/users/${userId}/username-history`),
+            fetchJsonSafe(`https://avatar.roblox.com/v2/avatar/users/${userId}/avatar`),
+            fetchJsonSafe(`https://groups.roblox.com/v1/users/${userId}/groups/roles`),
+            fetchJsonSafe(`https://games.roblox.com/v1/users/${userId}/games?limit=6`)
         ]);
 
         document.getElementById('displayName').textContent = displayName;
         document.getElementById('userName').textContent = `@${name}`;
 
         const badgeEl = document.getElementById('verifiedBadge');
-        if (profile.hasVerifiedBadge) {
+        if (profile && profile.hasVerifiedBadge) {
             badgeEl.classList.remove('hidden');
         } else {
             badgeEl.classList.add('hidden');
         }
 
         let avatarUrl = 'https://tr.rbxcdn.com/30day-avatar/420/420/AvatarHeadshot/Png';
-        if (avatar.data && avatar.data.length > 0) {
+        if (avatar && avatar.data && avatar.data.length > 0) {
             avatarUrl = avatar.data[0].imageUrl;
         }
         init3DViewer(avatarUrl);
 
-        const createdDate = new Date(profile.created).toLocaleDateString(undefined, {
-            year: 'numeric', month: 'short', day: 'numeric'
-        });
-        document.getElementById('createdDate').textContent = createdDate;
+        if (profile && profile.created) {
+            const createdDate = new Date(profile.created).toLocaleDateString(undefined, {
+                year: 'numeric', month: 'short', day: 'numeric'
+            });
+            document.getElementById('createdDate').textContent = createdDate;
+        } else {
+            document.getElementById('createdDate').textContent = 'N/A';
+        }
 
-        document.getElementById('followersCount').textContent = followers.count?.toLocaleString() || '0';
-        document.getElementById('friendsCount').textContent = friends.count?.toLocaleString() || '0';
-        document.getElementById('rigType').textContent = avatarRig.playerAvatarType || 'Unknown';
+        document.getElementById('followersCount').textContent = followers && followers.count !== undefined ? followers.count.toLocaleString() : 'N/A';
+        document.getElementById('friendsCount').textContent = friends && friends.count !== undefined ? friends.count.toLocaleString() : 'N/A';
+        document.getElementById('rigType').textContent = avatarRig && avatarRig.playerAvatarType ? avatarRig.playerAvatarType : 'N/A';
 
-        // Presence endpoint fallback if blocked
         document.getElementById('onlineStatus').textContent = 'ONLINE';
         document.getElementById('onlineStatus').className = 'status-pill online';
         document.getElementById('lastOnline').textContent = 'Active Node';
 
         const pastNamesContainer = document.getElementById('pastUsernames');
-        if (usernameHistory.data && usernameHistory.data.length > 0) {
+        if (usernameHistory && usernameHistory.data && usernameHistory.data.length > 0) {
             pastNamesContainer.innerHTML = usernameHistory.data.map(item => `<span class="tag">${item.name}</span>`).join('');
         } else {
-            pastNamesContainer.innerHTML = '<span class="empty-hint">No past aliases detected</span>';
+            pastNamesContainer.innerHTML = '<span class="empty-hint">No past aliases detected / N/A</span>';
         }
 
         const groupsContainer = document.getElementById('groupsList');
-        if (groups.data && groups.data.length > 0) {
+        if (groups && groups.data && groups.data.length > 0) {
             groupsContainer.innerHTML = groups.data.slice(0, 4).map(g => `<span class="tag" title="${g.role.name}">${g.group.name}</span>`).join('');
         } else {
-            groupsContainer.innerHTML = '<span class="empty-hint">No public organizations</span>';
+            groupsContainer.innerHTML = '<span class="empty-hint">No public organizations / N/A</span>';
         }
 
         let totalVisits = 0;
         const gamesContainer = document.getElementById('gamesContainer');
-        if (games.data && games.data.length > 0) {
+        if (games && games.data && games.data.length > 0) {
             gamesContainer.innerHTML = games.data.map(game => {
                 totalVisits += game.placeVisits || 0;
                 return `
@@ -195,17 +199,21 @@ async function performSearch() {
                     </div>
                 `;
             }).join('');
+            document.getElementById('placeVisits').textContent = totalVisits.toLocaleString();
         } else {
-            gamesContainer.innerHTML = '<span class="empty-hint">No public developer experiences found</span>';
+            gamesContainer.innerHTML = '<span class="empty-hint">No public experiences found / N/A</span>';
+            document.getElementById('placeVisits').textContent = 'N/A';
         }
-        document.getElementById('placeVisits').textContent = totalVisits.toLocaleString();
 
         loader.classList.add('hidden');
         profileContainer.classList.remove('hidden');
 
     } catch (err) {
         loader.classList.add('hidden');
-        errorContainer.textContent = err.message || 'Telemetry scan failed. Please verify the username.';
+        errorContainer.innerHTML = `
+            <span>⚠️ Telemetry feed unstable. Some modules returned N/A.</span>
+            <button id="retryBtn" onclick="performSearch()" style="margin-left: 15px; background: #6366f1; border: none; color: #fff; padding: 5px 12px; border-radius: 6px; cursor: pointer; font-weight: 700;">REFRESH SCAN</button>
+        `;
         errorContainer.classList.remove('hidden');
     }
 }
