@@ -1,7 +1,16 @@
+```js
 // ============================================================
 // ROBLOX PROFILE LOOKUP
-// Reliable client-side version
+// GitHub Pages + Cloudflare Worker
 // ============================================================
+
+// ------------------------------------------------------------
+// CLOUDFLARE WORKER
+// ------------------------------------------------------------
+
+const CLOUDFLARE_WORKER =
+    'https://roblox-proxy.kaydenburke.workers.dev';
+
 
 // ------------------------------------------------------------
 // DOM ELEMENTS
@@ -12,6 +21,7 @@ const searchBtn = document.getElementById('searchBtn');
 const loader = document.getElementById('loader');
 const errorContainer = document.getElementById('errorContainer');
 const profileContainer = document.getElementById('profileContainer');
+
 
 // ------------------------------------------------------------
 // STATE
@@ -30,6 +40,7 @@ let currentRotationVelocity = 0.003;
 
 let currentRequestId = 0;
 
+
 // ------------------------------------------------------------
 // EVENT LISTENERS
 // ------------------------------------------------------------
@@ -45,6 +56,7 @@ if (usernameInput) {
         }
     });
 }
+
 
 // ------------------------------------------------------------
 // UTILITY FUNCTIONS
@@ -156,54 +168,110 @@ function showError(message, showRetry = true) {
 
     errorContainer.classList.remove('hidden');
 
-    const retryBtn = document.getElementById('retryBtn');
+    const retryBtn =
+        document.getElementById('retryBtn');
 
     if (retryBtn) {
-        retryBtn.addEventListener('click', performSearch);
+        retryBtn.addEventListener(
+            'click',
+            performSearch
+        );
     }
 }
 
 
 // ------------------------------------------------------------
-// ROBLOX API FETCHER
+// CLOUDFLARE + ROBLOX API FETCHER
 // ------------------------------------------------------------
 
 /*
-    IMPORTANT:
+    All Roblox API requests are sent through the
+    Cloudflare Worker.
 
-    The old version used:
-
-        https://api.codetabs.com/v1/proxy
-
-    That public proxy was the biggest source of "failed" searches.
-
-    This version talks directly to Roblox's public APIs.
+    Browser:
+        GitHub Pages
+            ↓
+        Cloudflare Worker
+            ↓
+        Roblox API
 */
 
-async function fetchJson(url, options = {}, timeout = 10000) {
-    const controller = new AbortController();
 
-    const timeoutId = setTimeout(() => {
-        controller.abort();
-    }, timeout);
+async function fetchJson(
+    url,
+    options = {},
+    timeout = 15000
+) {
+    const controller =
+        new AbortController();
+
+    const timeoutId =
+        setTimeout(() => {
+            controller.abort();
+        }, timeout);
+
 
     try {
-        const response = await fetch(url, {
-            ...options,
-            signal: controller.signal,
-            headers: {
-                Accept: 'application/json',
-                ...(options.headers || {})
-            }
-        });
+
+        const proxyUrl =
+            `${CLOUDFLARE_WORKER}/?url=${encodeURIComponent(url)}`;
+
+
+        const response =
+            await fetch(
+                proxyUrl,
+                {
+                    ...options,
+
+                    signal:
+                        controller.signal,
+
+                    headers: {
+                        Accept:
+                            'application/json',
+
+                        ...(options.headers || {})
+                    }
+                }
+            );
+
 
         if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
+
+            let details = '';
+
+            try {
+                details =
+                    await response.text();
+            } catch {
+                // Ignore response parsing errors.
+            }
+
+
+            throw new Error(
+                `HTTP ${response.status}${
+                    details
+                        ? `: ${details}`
+                        : ''
+                }`
+            );
         }
+
 
         return await response.json();
 
+    } catch (error) {
+
+        if (error?.name === 'AbortError') {
+            throw new Error(
+                'The Roblox request timed out. Please try again.'
+            );
+        }
+
+        throw error;
+
     } finally {
+
         clearTimeout(timeoutId);
     }
 }
@@ -213,11 +281,25 @@ async function fetchJson(url, options = {}, timeout = 10000) {
 // SAFE OPTIONAL API FETCH
 // ------------------------------------------------------------
 
-async function optionalFetch(url, options = {}) {
+async function optionalFetch(
+    url,
+    options = {}
+) {
     try {
-        return await fetchJson(url, options);
+
+        return await fetchJson(
+            url,
+            options
+        );
+
     } catch (error) {
-        console.warn('Optional Roblox API request failed:', url, error);
+
+        console.warn(
+            'Optional Roblox API request failed:',
+            url,
+            error
+        );
+
         return null;
     }
 }
@@ -228,117 +310,192 @@ async function optionalFetch(url, options = {}) {
 // ------------------------------------------------------------
 
 function init3DViewer(imageUrl) {
-    const container = document.getElementById('canvasContainer');
+
+    const container =
+        document.getElementById(
+            'canvasContainer'
+        );
+
 
     if (!container) {
         return;
     }
 
+
     // Destroy old renderer/canvas
     container.innerHTML = '';
 
+
     if (!window.THREE) {
-        console.warn('Three.js is not loaded.');
+
+        console.warn(
+            'Three.js is not loaded.'
+        );
+
         return;
     }
 
-    scene = new THREE.Scene();
 
-    camera = new THREE.PerspectiveCamera(
-        45,
-        1,
-        0.1,
-        1000
-    );
+    scene =
+        new THREE.Scene();
+
+
+    camera =
+        new THREE.PerspectiveCamera(
+            45,
+            1,
+            0.1,
+            1000
+        );
+
 
     camera.position.z = 2.7;
 
-    renderer = new THREE.WebGLRenderer({
-        antialias: true,
-        alpha: true
-    });
 
-    renderer.setSize(115, 115);
+    renderer =
+        new THREE.WebGLRenderer({
+            antialias: true,
+            alpha: true
+        });
+
+
+    renderer.setSize(
+        115,
+        115
+    );
+
 
     renderer.setPixelRatio(
-        Math.min(window.devicePixelRatio || 1, 2)
+        Math.min(
+            window.devicePixelRatio || 1,
+            2
+        )
     );
 
-    container.appendChild(renderer.domElement);
 
-    const geometry = new THREE.PlaneGeometry(
-        2.1,
-        2.1,
-        32,
-        32
+    container.appendChild(
+        renderer.domElement
     );
+
+
+    const geometry =
+        new THREE.PlaneGeometry(
+            2.1,
+            2.1,
+            32,
+            32
+        );
+
 
     avatarMesh = null;
 
-    const textureLoader = new THREE.TextureLoader();
 
-    textureLoader.crossOrigin = 'anonymous';
+    const textureLoader =
+        new THREE.TextureLoader();
+
+
+    textureLoader.crossOrigin =
+        'anonymous';
+
 
     textureLoader.load(
+
         imageUrl,
 
-        // Success
-        (texture) => {
-            const material = new THREE.MeshBasicMaterial({
-                map: texture,
-                transparent: true,
-                side: THREE.DoubleSide
-            });
 
-            avatarMesh = new THREE.Mesh(
-                geometry,
-                material
+        // ----------------------------------------------------
+        // SUCCESS
+        // ----------------------------------------------------
+
+        (texture) => {
+
+            const material =
+                new THREE.MeshBasicMaterial({
+                    map: texture,
+                    transparent: true,
+                    side: THREE.DoubleSide
+                });
+
+
+            avatarMesh =
+                new THREE.Mesh(
+                    geometry,
+                    material
+                );
+
+
+            scene.add(
+                avatarMesh
             );
 
-            scene.add(avatarMesh);
 
             currentRotationVelocity =
                 targetRotationVelocity;
 
+
             animate3D();
         },
 
-        // Progress
+
+        // ----------------------------------------------------
+        // PROGRESS
+        // ----------------------------------------------------
+
         undefined,
 
-        // Error
+
+        // ----------------------------------------------------
+        // ERROR
+        // ----------------------------------------------------
+
         () => {
+
             console.warn(
                 'Could not load Roblox avatar image.'
             );
 
-            const material = new THREE.MeshBasicMaterial({
-                color: 0x6366f1
-            });
 
-            avatarMesh = new THREE.Mesh(
-                geometry,
-                material
+            const material =
+                new THREE.MeshBasicMaterial({
+                    color: 0x6366f1
+                });
+
+
+            avatarMesh =
+                new THREE.Mesh(
+                    geometry,
+                    material
+                );
+
+
+            scene.add(
+                avatarMesh
             );
 
-            scene.add(avatarMesh);
 
             animate3D();
         }
     );
 
+
     // --------------------------------------------------------
     // Mouse controls
     // --------------------------------------------------------
 
-    container.addEventListener('mousedown', (event) => {
-        isDragging = true;
+    container.addEventListener(
+        'mousedown',
+        (event) => {
 
-        previousMousePosition = {
-            x: event.clientX,
-            y: event.clientY
-        };
-    });
+            isDragging = true;
+
+
+            previousMousePosition = {
+                x: event.clientX,
+                y: event.clientY
+            };
+        }
+    );
+
 
     // --------------------------------------------------------
     // Touch controls
@@ -347,16 +504,23 @@ function init3DViewer(imageUrl) {
     container.addEventListener(
         'touchstart',
         (event) => {
-            if (!event.touches.length) return;
+
+            if (!event.touches.length) {
+                return;
+            }
+
 
             isDragging = true;
+
 
             previousMousePosition = {
                 x: event.touches[0].clientX,
                 y: event.touches[0].clientY
             };
         },
-        { passive: true }
+        {
+            passive: true
+        }
     );
 }
 
@@ -365,32 +529,54 @@ function init3DViewer(imageUrl) {
 // GLOBAL MOUSE MOVEMENT
 // ------------------------------------------------------------
 
-window.addEventListener('mousemove', (event) => {
-    if (!isDragging || !avatarMesh) {
-        return;
+window.addEventListener(
+    'mousemove',
+    (event) => {
+
+        if (
+            !isDragging ||
+            !avatarMesh
+        ) {
+            return;
+        }
+
+
+        const deltaX =
+            event.clientX -
+            previousMousePosition.x;
+
+
+        const deltaY =
+            event.clientY -
+            previousMousePosition.y;
+
+
+        avatarMesh.rotation.y +=
+            deltaX * 0.01;
+
+
+        avatarMesh.rotation.x +=
+            deltaY * 0.01;
+
+
+        currentRotationVelocity =
+            deltaX * 0.0005;
+
+
+        previousMousePosition = {
+            x: event.clientX,
+            y: event.clientY
+        };
     }
-
-    const deltaX =
-        event.clientX - previousMousePosition.x;
-
-    const deltaY =
-        event.clientY - previousMousePosition.y;
-
-    avatarMesh.rotation.y += deltaX * 0.01;
-    avatarMesh.rotation.x += deltaY * 0.01;
-
-    currentRotationVelocity = deltaX * 0.0005;
-
-    previousMousePosition = {
-        x: event.clientX,
-        y: event.clientY
-    };
-});
+);
 
 
-window.addEventListener('mouseup', () => {
-    isDragging = false;
-});
+window.addEventListener(
+    'mouseup',
+    () => {
+        isDragging = false;
+    }
+);
 
 
 // ------------------------------------------------------------
@@ -400,40 +586,59 @@ window.addEventListener('mouseup', () => {
 window.addEventListener(
     'touchmove',
     (event) => {
-        if (!isDragging || !avatarMesh) {
+
+        if (
+            !isDragging ||
+            !avatarMesh
+        ) {
             return;
         }
+
 
         if (!event.touches.length) {
             return;
         }
 
+
         const deltaX =
             event.touches[0].clientX -
             previousMousePosition.x;
+
 
         const deltaY =
             event.touches[0].clientY -
             previousMousePosition.y;
 
-        avatarMesh.rotation.y += deltaX * 0.01;
-        avatarMesh.rotation.x += deltaY * 0.01;
+
+        avatarMesh.rotation.y +=
+            deltaX * 0.01;
+
+
+        avatarMesh.rotation.x +=
+            deltaY * 0.01;
+
 
         currentRotationVelocity =
             deltaX * 0.0005;
+
 
         previousMousePosition = {
             x: event.touches[0].clientX,
             y: event.touches[0].clientY
         };
     },
-    { passive: true }
+    {
+        passive: true
+    }
 );
 
 
-window.addEventListener('touchend', () => {
-    isDragging = false;
-});
+window.addEventListener(
+    'touchend',
+    () => {
+        isDragging = false;
+    }
+);
 
 
 // ------------------------------------------------------------
@@ -441,26 +646,46 @@ window.addEventListener('touchend', () => {
 // ------------------------------------------------------------
 
 function animate3D() {
-    if (!renderer || !scene || !camera) {
+
+    if (
+        !renderer ||
+        !scene ||
+        !camera
+    ) {
         return;
     }
 
-    requestAnimationFrame(animate3D);
 
-    if (avatarMesh && !isDragging) {
+    requestAnimationFrame(
+        animate3D
+    );
+
+
+    if (
+        avatarMesh &&
+        !isDragging
+    ) {
+
         currentRotationVelocity +=
             (
                 targetRotationVelocity -
                 currentRotationVelocity
             ) * 0.05;
 
+
         avatarMesh.rotation.y +=
             currentRotationVelocity;
 
-        avatarMesh.rotation.x *= 0.95;
+
+        avatarMesh.rotation.x *=
+            0.95;
     }
 
-    renderer.render(scene, camera);
+
+    renderer.render(
+        scene,
+        camera
+    );
 }
 
 
@@ -468,13 +693,19 @@ function animate3D() {
 // FIND ROBLOX USER
 // ------------------------------------------------------------
 
-async function findRobloxUser(username) {
+async function findRobloxUser(
+    username
+) {
+
     const url =
         `https://users.roblox.com/v1/users/search` +
         `?keyword=${encodeURIComponent(username)}` +
         `&limit=10`;
 
-    const data = await fetchJson(url);
+
+    const data =
+        await fetchJson(url);
+
 
     if (
         !data ||
@@ -484,19 +715,23 @@ async function findRobloxUser(username) {
         return null;
     }
 
+
     // Prefer exact username match.
-    const exactMatch = data.data.find(
-        user =>
-            user.name &&
-            user.name.toLowerCase() ===
-            username.toLowerCase()
-    );
+    const exactMatch =
+        data.data.find(
+            user =>
+                user.name &&
+                user.name.toLowerCase() ===
+                username.toLowerCase()
+        );
+
 
     if (exactMatch) {
         return exactMatch;
     }
 
-    // Otherwise use the first Roblox search result.
+
+    // Otherwise use first Roblox search result.
     return data.data[0];
 }
 
@@ -505,8 +740,12 @@ async function findRobloxUser(username) {
 // FETCH PROFILE DATA
 // ------------------------------------------------------------
 
-async function fetchProfileData(userId) {
+async function fetchProfileData(
+    userId
+) {
+
     const urls = {
+
         profile:
             `https://users.roblox.com/v1/users/${userId}`,
 
@@ -539,54 +778,113 @@ async function fetchProfileData(userId) {
             `https://presence.roblox.com/v1/presence/users`
     };
 
-    const results = await Promise.allSettled([
-        optionalFetch(urls.profile),
-        optionalFetch(urls.avatar),
-        optionalFetch(urls.followers),
-        optionalFetch(urls.friends),
-        optionalFetch(urls.usernameHistory),
-        optionalFetch(urls.avatarRig),
-        optionalFetch(urls.groups),
-        optionalFetch(urls.games),
 
-        // Roblox presence uses POST.
-        optionalFetch(
-            urls.presence,
-            {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    userIds: [Number(userId)]
-                })
+    const results =
+        await Promise.allSettled([
+
+            optionalFetch(
+                urls.profile
+            ),
+
+            optionalFetch(
+                urls.avatar
+            ),
+
+            optionalFetch(
+                urls.followers
+            ),
+
+            optionalFetch(
+                urls.friends
+            ),
+
+            optionalFetch(
+                urls.usernameHistory
+            ),
+
+            optionalFetch(
+                urls.avatarRig
+            ),
+
+            optionalFetch(
+                urls.groups
+            ),
+
+            optionalFetch(
+                urls.games
+            ),
+
+
+            // Roblox presence uses POST.
+            optionalFetch(
+                urls.presence,
+                {
+                    method: 'POST',
+
+                    headers: {
+                        'Content-Type':
+                            'application/json'
+                    },
+
+                    body:
+                        JSON.stringify({
+                            userIds: [
+                                Number(userId)
+                            ]
+                        })
+                }
+            )
+        ]);
+
+
+    const getResult =
+        (index) => {
+
+            const result =
+                results[index];
+
+
+            if (
+                result &&
+                result.status ===
+                    'fulfilled'
+            ) {
+                return result.value;
             }
-        )
-    ]);
 
-    const getResult = (index) => {
-        const result = results[index];
 
-        if (
-            result &&
-            result.status === 'fulfilled'
-        ) {
-            return result.value;
-        }
+            return null;
+        };
 
-        return null;
-    };
 
     return {
-        profile: getResult(0),
-        avatar: getResult(1),
-        followers: getResult(2),
-        friends: getResult(3),
-        usernameHistory: getResult(4),
-        avatarRig: getResult(5),
-        groups: getResult(6),
-        games: getResult(7),
-        presence: getResult(8)
+
+        profile:
+            getResult(0),
+
+        avatar:
+            getResult(1),
+
+        followers:
+            getResult(2),
+
+        friends:
+            getResult(3),
+
+        usernameHistory:
+            getResult(4),
+
+        avatarRig:
+            getResult(5),
+
+        groups:
+            getResult(6),
+
+        games:
+            getResult(7),
+
+        presence:
+            getResult(8)
     };
 }
 
@@ -595,32 +893,44 @@ async function fetchProfileData(userId) {
 // UPDATE IDENTITY
 // ------------------------------------------------------------
 
-function updateIdentity(user, profile) {
+function updateIdentity(
+    user,
+    profile
+) {
+
     const displayName =
         profile?.displayName ||
         user?.displayName ||
         user?.name ||
         'Unknown';
 
+
     const username =
         profile?.name ||
         user?.name ||
         'Unknown';
+
 
     setText(
         'displayName',
         displayName
     );
 
+
     setText(
         'userName',
         `@${username}`
     );
 
+
     const badgeEl =
-        document.getElementById('verifiedBadge');
+        document.getElementById(
+            'verifiedBadge'
+        );
+
 
     if (badgeEl) {
+
         badgeEl.classList.toggle(
             'hidden',
             !profile?.hasVerifiedBadge
@@ -633,9 +943,13 @@ function updateIdentity(user, profile) {
 // UPDATE AVATAR
 // ------------------------------------------------------------
 
-function updateAvatar(avatar) {
+function updateAvatar(
+    avatar
+) {
+
     let avatarUrl =
         'https://tr.rbxcdn.com/30day-avatar/420/420/AvatarHeadshot/Png';
+
 
     if (
         avatar &&
@@ -643,11 +957,15 @@ function updateAvatar(avatar) {
         avatar.data.length > 0 &&
         avatar.data[0].imageUrl
     ) {
+
         avatarUrl =
             avatar.data[0].imageUrl;
     }
 
-    init3DViewer(avatarUrl);
+
+    init3DViewer(
+        avatarUrl
+    );
 }
 
 
@@ -655,28 +973,49 @@ function updateAvatar(avatar) {
 // UPDATE STATS
 // ------------------------------------------------------------
 
-function updateStats(data) {
+function updateStats(
+    data
+) {
+
     setText(
         'createdDate',
-        formatDate(data.profile?.created)
+        formatDate(
+            data.profile?.created
+        )
     );
+
 
     setText(
         'followersCount',
-        data.followers?.count !== undefined
-            ? formatNumber(data.followers.count)
+
+        data.followers?.count !==
+        undefined
+
+            ? formatNumber(
+                data.followers.count
+            )
+
             : 'N/A'
     );
+
 
     setText(
         'friendsCount',
-        data.friends?.count !== undefined
-            ? formatNumber(data.friends.count)
+
+        data.friends?.count !==
+        undefined
+
+            ? formatNumber(
+                data.friends.count
+            )
+
             : 'N/A'
     );
 
+
     setText(
         'rigType',
+
         data.avatarRig?.playerAvatarType ||
         'N/A'
     );
@@ -687,42 +1026,63 @@ function updateStats(data) {
 // UPDATE PRESENCE
 // ------------------------------------------------------------
 
-function updatePresence(presenceData) {
+function updatePresence(
+    presenceData
+) {
+
     const statusElement =
-        document.getElementById('onlineStatus');
+        document.getElementById(
+            'onlineStatus'
+        );
+
 
     const lastOnlineElement =
-        document.getElementById('lastOnline');
+        document.getElementById(
+            'lastOnline'
+        );
+
 
     if (!statusElement) {
         return;
     }
 
+
     let presence = null;
+
 
     if (
         presenceData &&
-        Array.isArray(presenceData.userPresences) &&
+        Array.isArray(
+            presenceData.userPresences
+        ) &&
         presenceData.userPresences.length > 0
     ) {
+
         presence =
             presenceData.userPresences[0];
     }
 
+
     if (!presence) {
+
         statusElement.textContent =
             'UNKNOWN';
+
 
         statusElement.className =
             'status-pill';
 
+
         if (lastOnlineElement) {
+
             lastOnlineElement.textContent =
                 'Status unavailable';
         }
 
+
         return;
     }
+
 
     /*
         Roblox presenceType:
@@ -733,34 +1093,60 @@ function updatePresence(presenceData) {
         3 = In Studio
     */
 
-    const presenceType =
-        Number(presence.userPresenceType);
 
-    let statusText = 'OFFLINE';
+    const presenceType =
+        Number(
+            presence.userPresenceType
+        );
+
+
+    let statusText =
+        'OFFLINE';
+
 
     if (presenceType === 1) {
-        statusText = 'ONLINE';
+
+        statusText =
+            'ONLINE';
+
     } else if (presenceType === 2) {
-        statusText = 'IN GAME';
+
+        statusText =
+            'IN GAME';
+
     } else if (presenceType === 3) {
-        statusText = 'IN STUDIO';
+
+        statusText =
+            'IN STUDIO';
     }
 
-    statusElement.textContent = statusText;
+
+    statusElement.textContent =
+        statusText;
+
 
     statusElement.className =
         presenceType === 0
+
             ? 'status-pill'
+
             : 'status-pill online';
 
+
     if (lastOnlineElement) {
+
         if (presence.lastLocation) {
+
             lastOnlineElement.textContent =
                 presence.lastLocation;
+
         } else {
+
             lastOnlineElement.textContent =
                 statusText === 'OFFLINE'
+
                     ? 'Currently offline'
+
                     : 'Active';
         }
     }
@@ -771,22 +1157,31 @@ function updatePresence(presenceData) {
 // UPDATE USERNAME HISTORY
 // ------------------------------------------------------------
 
-function updateUsernameHistory(history) {
+function updateUsernameHistory(
+    history
+) {
+
     const container =
-        document.getElementById('pastUsernames');
+        document.getElementById(
+            'pastUsernames'
+        );
+
 
     if (!container) {
         return;
     }
+
 
     if (
         history &&
         Array.isArray(history.data) &&
         history.data.length > 0
     ) {
+
         container.innerHTML =
             history.data
                 .map(item => {
+
                     return `
                         <span class="tag">
                             ${escapeHtml(item.name)}
@@ -794,7 +1189,9 @@ function updateUsernameHistory(history) {
                     `;
                 })
                 .join('');
+
     } else {
+
         container.innerHTML =
             '<span class="empty-hint">No past aliases</span>';
     }
@@ -805,30 +1202,41 @@ function updateUsernameHistory(history) {
 // UPDATE GROUPS
 // ------------------------------------------------------------
 
-function updateGroups(groups) {
+function updateGroups(
+    groups
+) {
+
     const container =
-        document.getElementById('groupsList');
+        document.getElementById(
+            'groupsList'
+        );
+
 
     if (!container) {
         return;
     }
+
 
     if (
         groups &&
         Array.isArray(groups.data) &&
         groups.data.length > 0
     ) {
+
         container.innerHTML =
             groups.data
                 .slice(0, 4)
                 .map(groupData => {
+
                     const groupName =
                         groupData?.group?.name ||
                         'Unknown group';
 
+
                     const roleName =
                         groupData?.role?.name ||
                         'Unknown role';
+
 
                     return `
                         <span
@@ -840,7 +1248,9 @@ function updateGroups(groups) {
                     `;
                 })
                 .join('');
+
     } else {
+
         container.innerHTML =
             '<span class="empty-hint">No public organizations</span>';
     }
@@ -851,45 +1261,69 @@ function updateGroups(groups) {
 // UPDATE EXPERIENCES
 // ------------------------------------------------------------
 
-function updateGames(games) {
+function updateGames(
+    games
+) {
+
     const container =
-        document.getElementById('gamesContainer');
+        document.getElementById(
+            'gamesContainer'
+        );
+
 
     const visitsElement =
-        document.getElementById('placeVisits');
+        document.getElementById(
+            'placeVisits'
+        );
+
 
     if (!container) {
         return;
     }
+
 
     if (
         !games ||
         !Array.isArray(games.data) ||
         games.data.length === 0
     ) {
+
         container.innerHTML =
             '<span class="empty-hint">No public experiences found</span>';
 
+
         if (visitsElement) {
-            visitsElement.textContent = 'N/A';
+
+            visitsElement.textContent =
+                'N/A';
         }
+
 
         return;
     }
 
+
     let totalVisits = 0;
+
 
     container.innerHTML =
         games.data
             .map(game => {
+
                 const gameName =
                     game?.name ||
                     'Unnamed experience';
 
-                const visits =
-                    Number(game?.placeVisits) || 0;
 
-                totalVisits += visits;
+                const visits =
+                    Number(
+                        game?.placeVisits
+                    ) || 0;
+
+
+                totalVisits +=
+                    visits;
+
 
                 return `
                     <div class="exp-card">
@@ -906,9 +1340,13 @@ function updateGames(games) {
             })
             .join('');
 
+
     if (visitsElement) {
+
         visitsElement.textContent =
-            formatNumber(totalVisits);
+            formatNumber(
+                totalVisits
+            );
     }
 }
 
@@ -918,10 +1356,13 @@ function updateGames(games) {
 // ------------------------------------------------------------
 
 async function performSearch() {
+
     const username =
         usernameInput?.value?.trim();
 
+
     if (!username) {
+
         showError(
             'Please enter a Roblox username.',
             false
@@ -930,64 +1371,97 @@ async function performSearch() {
         return;
     }
 
-    // Prevent older requests from overwriting
-    // a newer search.
+
+    // Prevent older requests from
+    // overwriting newer searches.
     const requestId =
         ++currentRequestId;
 
+
     showLoading(true);
+
     clearError();
+
     showProfile(false);
+
 
     // Disable button while searching.
     if (searchBtn) {
-        searchBtn.disabled = true;
+
+        searchBtn.disabled =
+            true;
     }
 
+
     try {
+
         // ----------------------------------------------------
         // STEP 1 — Find user
         // ----------------------------------------------------
 
         let user;
 
+
         try {
+
             user =
-                await findRobloxUser(username);
+                await findRobloxUser(
+                    username
+                );
+
         } catch (error) {
+
             console.error(
                 'Roblox user search failed:',
                 error
             );
+
 
             throw new Error(
                 'Roblox search is temporarily unavailable. Please try again in a moment.'
             );
         }
 
-        // If another request started, stop this one.
-        if (requestId !== currentRequestId) {
+
+        // If another request started,
+        // stop this one.
+        if (
+            requestId !==
+            currentRequestId
+        ) {
             return;
         }
 
+
         if (!user) {
+
             throw new Error(
                 `No Roblox user named "${username}" was found.`
             );
         }
 
-        const userId = user.id;
+
+        const userId =
+            user.id;
+
 
         // ----------------------------------------------------
         // STEP 2 — Fetch profile information
         // ----------------------------------------------------
 
         const data =
-            await fetchProfileData(userId);
+            await fetchProfileData(
+                userId
+            );
 
-        if (requestId !== currentRequestId) {
+
+        if (
+            requestId !==
+            currentRequestId
+        ) {
             return;
         }
+
 
         // ----------------------------------------------------
         // STEP 3 — Populate UI
@@ -998,27 +1472,36 @@ async function performSearch() {
             data.profile
         );
 
+
         updateAvatar(
             data.avatar
         );
 
-        updateStats(data);
+
+        updateStats(
+            data
+        );
+
 
         updatePresence(
             data.presence
         );
 
+
         updateUsernameHistory(
             data.usernameHistory
         );
+
 
         updateGroups(
             data.groups
         );
 
+
         updateGames(
             data.games
         );
+
 
         // ----------------------------------------------------
         // STEP 4 — Show profile
@@ -1026,8 +1509,10 @@ async function performSearch() {
 
         showProfile(true);
 
+
         // Some secondary APIs may fail independently.
         const successfulRequests = [
+
             data.profile,
             data.avatar,
             data.followers,
@@ -1037,26 +1522,39 @@ async function performSearch() {
             data.groups,
             data.games,
             data.presence
+
         ].filter(Boolean).length;
 
-        if (successfulRequests < 3) {
+
+        if (
+            successfulRequests < 3
+        ) {
+
             showError(
                 'The Roblox profile was found, but some profile information could not be loaded.',
                 true
             );
         }
 
+
     } catch (error) {
+
         console.error(
             'Profile search error:',
             error
         );
 
-        if (requestId !== currentRequestId) {
+
+        if (
+            requestId !==
+            currentRequestId
+        ) {
             return;
         }
 
+
         showProfile(true);
+
 
         showError(
             error?.message ||
@@ -1064,12 +1562,21 @@ async function performSearch() {
             true
         );
 
+
     } finally {
-        if (requestId === currentRequestId) {
+
+        if (
+            requestId ===
+            currentRequestId
+        ) {
+
             showLoading(false);
 
+
             if (searchBtn) {
-                searchBtn.disabled = false;
+
+                searchBtn.disabled =
+                    false;
             }
         }
     }
@@ -1081,31 +1588,41 @@ async function performSearch() {
 // ------------------------------------------------------------
 
 function loadUsernameFromUrl() {
+
     try {
+
         const params =
             new URLSearchParams(
                 window.location.search
             );
 
+
         const username =
             params.get('user');
+
 
         if (
             username &&
             usernameInput
         ) {
+
             usernameInput.value =
                 username;
 
+
             performSearch();
         }
+
+
     } catch (error) {
+
         console.warn(
             'Could not read URL parameters:',
             error
         );
     }
 }
+
 
 loadUsernameFromUrl();
 ```
