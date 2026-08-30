@@ -3,120 +3,86 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RoSearcher | Elite Intelligence</title>
+    <title>RoSearcher - Roblox Profile Telemetry</title>
     <link rel="stylesheet" href="style.css">
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
-    <div class="cyber-grid-bg"></div>
-    <div class="neon-blob blob-1"></div>
-    <div class="neon-blob blob-2"></div>
-
     <div class="app-container">
-        <header>
-            <div class="logo-badge">SECURE INTEL v2.4</div>
-            <h1>RO<span>SEARCHER</span></h1>
-            <p>Advanced deep-probe telemetry and profile analytics for Roblox.</p>
+        <header class="header">
+            <h1>RoSearcher</h1>
+            <p class="subtitle">Advanced Roblox Profile & Telemetry Inspector</p>
+            <div class="search-box">
+                <input type="text" id="usernameInput" placeholder="Enter Roblox username..." autocomplete="off">
+                <button id="searchBtn">SCAN PROFILE</button>
+            </div>
         </header>
 
-        <div class="search-section">
-            <div class="search-bar-glow">
-                <input type="text" id="usernameInput" placeholder="Enter exact Roblox username..." autocomplete="off">
-                <button id="searchBtn">
-                    <span>INITIALIZE SCAN</span>
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-                </button>
-            </div>
+        <div id="loader" class="loader hidden">
+            <div class="spinner"></div>
+            <p>Querying Roblox telemetry nodes...</p>
         </div>
 
-        <div id="loader" class="hidden">
-            <div class="radar-loader">
-                <div class="ring"></div>
-                <div class="ring"></div>
-                <div class="core-dot"></div>
-            </div>
-            <p class="loader-text">ESTABLISHING SECURE CONNECTION TO ROBLOX API...</p>
-        </div>
+        <div id="errorContainer" class="error-banner hidden"></div>
 
-        <div id="errorContainer" class="hidden"></div>
-
-        <div id="profileContainer" class="hidden">
-            <div class="dashboard-grid">
-                <!-- Left: Interactive 3D Hologram Avatar Viewport -->
-                <div class="glass-card viewport-card">
-                    <div class="card-header-tag">HOLO-RENDER v1.0</div>
-                    <div id="canvasContainer"></div>
-                    <div class="viewport-footer">
-                        <div class="name-cluster">
-                            <h2 id="displayName"></h2>
-                            <span id="verifiedBadge" class="hidden" title="Verified Creator">✓</span>
-                        </div>
-                        <p id="userName" class="handle"></p>
-                        <div class="status-pill-wrapper">
-                            <span id="onlineStatus" class="status-pill offline">OFFLINE</span>
-                        </div>
+        <div id="profileContainer" class="profile-container hidden">
+            <div class="profile-top-card">
+                <div id="canvasContainer" class="avatar-3d-box" title="Click and drag to rotate 3D headshot"></div>
+                <div class="identity-info">
+                    <div class="name-row">
+                        <h2 id="displayName">Display Name</h2>
+                        <span id="verifiedBadge" class="verified-badge hidden" title="Verified User">✔</span>
                     </div>
-                </div>
-
-                <!-- Right: Telemetry Core Metrics -->
-                <div class="metrics-column">
-                    <div class="metrics-grid">
-                        <div class="glass-card metric-box">
-                            <span class="metric-label">ACCOUNT CREATION</span>
-                            <p id="createdDate" class="metric-val">-</p>
-                            <div class="metric-line"></div>
-                        </div>
-                        <div class="glass-card metric-box">
-                            <span class="metric-label">LAST ONLINE / LOCATION</span>
-                            <p id="lastOnline" class="metric-val">-</p>
-                            <div class="metric-line"></div>
-                        </div>
-                        <div class="glass-card metric-box">
-                            <span class="metric-label">GLOBAL FOLLOWERS</span>
-                            <p id="followersCount" class="metric-val">-</p>
-                            <div class="metric-line"></div>
-                        </div>
-                        <div class="glass-card metric-box">
-                            <span class="metric-label">ACTIVE CONNECTIONS</span>
-                            <p id="friendsCount" class="metric-val">-</p>
-                            <div class="metric-line"></div>
-                        </div>
-                        <div class="glass-card metric-box">
-                            <span class="metric-label">AVATAR RIG CONFIG</span>
-                            <p id="rigType" class="metric-val">-</p>
-                            <div class="metric-line"></div>
-                        </div>
-                        <div class="glass-card metric-box">
-                            <span class="metric-label">TOTAL PLACE VISITS</span>
-                            <p id="placeVisits" class="metric-val">-</p>
-                            <div class="metric-line"></div>
-                        </div>
+                    <p id="userName" class="username-tag">@username</p>
+                    <div class="status-box">
+                        <span id="onlineStatus" class="status-pill offline">OFFLINE</span>
+                        <span id="lastOnline" class="last-online-text">Restricted</span>
                     </div>
                 </div>
             </div>
 
-            <!-- Secondary Info Modules -->
-            <div class="secondary-grid">
-                <div class="glass-card info-module">
-                    <h3>ALIAS HISTORY</h3>
-                    <div id="pastUsernames" class="tag-flex">
-                        <span class="empty-hint">No past aliases detected</span>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <h3>Account Age</h3>
+                    <p id="createdDate">N/A</p>
+                </div>
+                <div class="stat-card">
+                    <h3>Followers</h3>
+                    <p id="followersCount">N/A</p>
+                </div>
+                <div class="stat-card">
+                    <h3>Friends</h3>
+                    <p id="friendsCount">N/A</p>
+                </div>
+                <div class="stat-card">
+                    <h3>Rig Type</h3>
+                    <p id="rigType">N/A</p>
+                </div>
+            </div>
+
+            <div class="details-grid">
+                <div class="detail-card">
+                    <h3>Username Aliases</h3>
+                    <div id="pastUsernames" class="tag-container">
+                        <span class="empty-hint">No data</span>
                     </div>
                 </div>
-                <div class="glass-card info-module">
-                    <h3>PRIMARY AFFILIATIONS</h3>
-                    <div id="groupsList" class="tag-flex">
-                        <span class="empty-hint">No public organizations</span>
+
+                <div class="detail-card">
+                    <h3>Primary Organizations</h3>
+                    <div id="groupsList" class="tag-container">
+                        <span class="empty-hint">No data</span>
                     </div>
                 </div>
             </div>
 
-            <!-- Experiences Grid -->
-            <div class="glass-card full-width-module">
-                <h3>DISCOVERED EXPERIENCES</h3>
-                <div id="gamesContainer" class="experiences-grid">
-                    <span class="empty-hint">No public developer experiences found</span>
+            <div class="experiences-section">
+                <div class="exp-header">
+                    <h3>Featured Experiences</h3>
+                    <span class="visits-label">Total Visits: <strong id="placeVisits">N/A</strong></span>
+                </div>
+                <div id="gamesContainer" class="games-grid">
+                    <span class="empty-hint">No developer experiences found</span>
                 </div>
             </div>
         </div>
