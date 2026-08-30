@@ -1,10 +1,11 @@
+```javascript
 // ============================================================
-// RoSearcher
-// Roblox public profile lookup
+// ROSEARCHER
+// Roblox Profile Lookup
 // GitHub Pages + Cloudflare Worker
 // ============================================================
 
-const WORKER =
+const WORKER_URL =
     'https://roblox-proxy.kaydenburke.workers.dev';
 
 
@@ -32,19 +33,28 @@ const profileContainer =
 // STATE
 // ============================================================
 
-let requestNumber = 0;
+let currentUser = null;
+let currentData = null;
+let currentRequestId = 0;
 
-let avatarScene = null;
-let avatarCamera = null;
-let avatarRenderer = null;
+let showingAllUsernames = false;
+let showingAllGroups = false;
+let showingAllGames = false;
+
+let scene = null;
+let camera = null;
+let renderer = null;
 let avatarMesh = null;
 
-let dragging = false;
+let isDragging = false;
 
-let previousMouse = {
+let previousMousePosition = {
     x: 0,
     y: 0
 };
+
+let currentRotationVelocity = 0.003;
+const targetRotationVelocity = 0.003;
 
 
 // ============================================================
@@ -52,64 +62,17 @@ let previousMouse = {
 // ============================================================
 
 if (searchBtn) {
-    searchBtn.addEventListener(
-        'click',
-        performSearch
-    );
+    searchBtn.addEventListener('click', performSearch);
 }
 
 if (usernameInput) {
-    usernameInput.addEventListener(
-        'keydown',
-        function (event) {
-
-            if (event.key === 'Enter') {
-                event.preventDefault();
-                performSearch();
-            }
-
+    usernameInput.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            performSearch();
         }
-    );
+    });
 }
-
-
-document.querySelectorAll(
-    '.show-all-btn'
-).forEach(function (button) {
-
-    button.addEventListener(
-        'click',
-        function () {
-
-            const targetId =
-                button.dataset.target;
-
-            const target =
-                document.getElementById(
-                    targetId
-                );
-
-            if (!target) {
-                return;
-            }
-
-            const expanded =
-                target.classList.toggle(
-                    'expanded'
-                );
-
-            target.classList.toggle(
-                'collapsed',
-                !expanded
-            );
-
-            button.textContent =
-                expanded
-                    ? 'Show Less'
-                    : 'Show All';
-        }
-    );
-});
 
 
 // ============================================================
@@ -117,11 +80,7 @@ document.querySelectorAll(
 // ============================================================
 
 function escapeHtml(value) {
-
-    if (
-        value === null ||
-        value === undefined
-    ) {
+    if (value === null || value === undefined) {
         return '';
     }
 
@@ -135,9 +94,7 @@ function escapeHtml(value) {
 
 
 function formatNumber(value) {
-
-    const number =
-        Number(value);
+    const number = Number(value);
 
     if (!Number.isFinite(number)) {
         return 'N/A';
@@ -148,82 +105,57 @@ function formatNumber(value) {
 
 
 function formatDate(value) {
-
     if (!value) {
         return 'N/A';
     }
 
-    const date =
-        new Date(value);
+    const date = new Date(value);
 
-    if (
-        Number.isNaN(
-            date.getTime()
-        )
-    ) {
+    if (Number.isNaN(date.getTime())) {
         return 'N/A';
     }
 
-    return date.toLocaleString(
-        undefined,
-        {
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric',
-            hour: 'numeric',
-            minute: '2-digit'
-        }
-    );
+    return date.toLocaleDateString(undefined, {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+    });
 }
 
 
-function formatDateOnly(value) {
-
+function formatDateTime(value) {
     if (!value) {
         return 'N/A';
     }
 
-    const date =
-        new Date(value);
+    const date = new Date(value);
 
-    if (
-        Number.isNaN(
-            date.getTime()
-        )
-    ) {
+    if (Number.isNaN(date.getTime())) {
         return 'N/A';
     }
 
-    return date.toLocaleDateString(
-        undefined,
-        {
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric'
-        }
-    );
+    return date.toLocaleString(undefined, {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
 }
 
 
-function calculateAge(created) {
-
+function getAccountAge(created) {
     if (!created) {
         return 'N/A';
     }
 
-    const date =
-        new Date(created);
+    const date = new Date(created);
 
-    if (
-        Number.isNaN(
-            date.getTime()
-        )
-    ) {
+    if (Number.isNaN(date.getTime())) {
         return 'N/A';
     }
 
-    const now =
-        new Date();
+    const now = new Date();
 
     let years =
         now.getFullYear() -
@@ -233,87 +165,39 @@ function calculateAge(created) {
         now.getMonth() -
         date.getMonth();
 
-    if (
-        months < 0 ||
-        (
-            months === 0 &&
-            now.getDate() <
-            date.getDate()
-        )
-    ) {
+    if (months < 0) {
         years--;
+        months += 12;
     }
 
-    if (years < 1) {
-
-        const days =
-            Math.floor(
-                (
-                    now.getTime() -
-                    date.getTime()
-                ) /
-                86400000
-            );
-
-        return days + ' days';
+    if (years > 0) {
+        return `${years}y ${months}m`;
     }
 
-    return years +
-        (
-            years === 1
-                ? ' year'
-                : ' years'
-        );
+    if (months > 0) {
+        return `${months} month${months === 1 ? '' : 's'}`;
+    }
+
+    return 'Less than a month';
 }
 
 
 function setText(id, value) {
-
     const element =
         document.getElementById(id);
 
     if (element) {
         element.textContent =
             value === null ||
-            value === undefined
+            value === undefined ||
+            value === ''
                 ? 'N/A'
                 : value;
     }
 }
 
 
-function setLink(id, url) {
-
-    const element =
-        document.getElementById(id);
-
-    if (!element) {
-        return;
-    }
-
-    if (!url) {
-
-        element.removeAttribute(
-            'href'
-        );
-
-        element.classList.add(
-            'disabled'
-        );
-
-        return;
-    }
-
-    element.href = url;
-
-    element.classList.remove(
-        'disabled'
-    );
-}
-
-
 function showLoading(show) {
-
     if (!loader) {
         return;
     }
@@ -326,7 +210,6 @@ function showLoading(show) {
 
 
 function showProfile(show) {
-
     if (!profileContainer) {
         return;
     }
@@ -339,7 +222,6 @@ function showProfile(show) {
 
 
 function clearError() {
-
     if (!errorContainer) {
         return;
     }
@@ -352,56 +234,40 @@ function clearError() {
 }
 
 
-function showError(
-    message,
-    retry = true
-) {
-
+function showError(message, retry = true) {
     if (!errorContainer) {
         return;
     }
 
     errorContainer.innerHTML = `
-        <span>
-            ⚠️ ${escapeHtml(message)}
-        </span>
+        <div class="error-content">
+            <span>${escapeHtml(message)}</span>
 
-        ${
-            retry
-                ? `
-                    <button
-                        id="retryBtn"
-                        type="button"
-                        style="
-                            margin-left:10px;
-                            padding:6px 10px;
-                            border:0;
-                            border-radius:6px;
-                            background:#6366f1;
-                            color:white;
-                            cursor:pointer;
-                            font-weight:700;
-                        "
-                    >
-                        Retry
-                    </button>
-                `
-                : ''
-        }
+            ${
+                retry
+                    ? `
+                        <button
+                            id="retryBtn"
+                            type="button"
+                            class="error-retry"
+                        >
+                            Retry
+                        </button>
+                    `
+                    : ''
+            }
+        </div>
     `;
 
     errorContainer.classList.remove(
         'hidden'
     );
 
-    const retryButton =
-        document.getElementById(
-            'retryBtn'
-        );
+    const retryBtn =
+        document.getElementById('retryBtn');
 
-    if (retryButton) {
-
-        retryButton.addEventListener(
+    if (retryBtn) {
+        retryBtn.addEventListener(
             'click',
             performSearch
         );
@@ -409,40 +275,46 @@ function showError(
 }
 
 
+function createElementFromHTML(html) {
+    const template =
+        document.createElement('template');
+
+    template.innerHTML =
+        html.trim();
+
+    return template.content.firstElementChild;
+}
+
+
 // ============================================================
-// WORKER REQUEST
+// WORKER FETCH
 // ============================================================
 
-async function request(
-    targetUrl,
+async function fetchJson(
+    robloxUrl,
     options = {},
-    timeout = 20000
+    timeout = 15000
 ) {
-
     const controller =
         new AbortController();
 
     const timeoutId =
         setTimeout(
-            function () {
-                controller.abort();
-            },
+            () => controller.abort(),
             timeout
         );
 
     try {
-
-        const workerUrl =
-            WORKER +
+        const proxyUrl =
+            WORKER_URL +
             '/?url=' +
             encodeURIComponent(
-                targetUrl
+                robloxUrl
             );
 
         const fetchOptions = {
             method:
-                options.method ||
-                'GET',
+                options.method || 'GET',
 
             signal:
                 controller.signal,
@@ -456,8 +328,7 @@ async function request(
         };
 
         if (
-            options.body !==
-            undefined
+            options.body !== undefined
         ) {
             fetchOptions.body =
                 options.body;
@@ -465,15 +336,13 @@ async function request(
 
         const response =
             await fetch(
-                workerUrl,
+                proxyUrl,
                 fetchOptions
             );
 
         if (!response.ok) {
-
             throw new Error(
-                'HTTP ' +
-                response.status
+                `HTTP ${response.status}`
             );
         }
 
@@ -483,42 +352,33 @@ async function request(
 
         if (
             error &&
-            error.name ===
-            'AbortError'
+            error.name === 'AbortError'
         ) {
-
             throw new Error(
-                'The request timed out.'
+                'The request timed out. Please try again.'
             );
         }
 
         throw error;
 
     } finally {
-
-        clearTimeout(
-            timeoutId
-        );
+        clearTimeout(timeoutId);
     }
 }
 
 
-async function optionalRequest(
+async function optionalFetch(
     url,
     options = {}
 ) {
-
     try {
-
-        return await request(
+        return await fetchJson(
             url,
             options
         );
-
     } catch (error) {
-
         console.warn(
-            'Request failed:',
+            'Optional request failed:',
             url,
             error
         );
@@ -532,20 +392,15 @@ async function optionalRequest(
 // FIND USER
 // ============================================================
 
-async function findUser(
-    username
-) {
-
+async function findRobloxUser(username) {
     const url =
         'https://users.roblox.com/v1/users/search' +
         '?keyword=' +
-        encodeURIComponent(
-            username
-        ) +
+        encodeURIComponent(username) +
         '&limit=10';
 
     const data =
-        await request(url);
+        await fetchJson(url);
 
     if (
         !data ||
@@ -557,141 +412,86 @@ async function findUser(
 
     const exact =
         data.data.find(
-            function (user) {
-
-                return (
-                    user.name &&
-                    user.name.toLowerCase() ===
-                    username.toLowerCase()
-                );
-            }
+            user =>
+                user.name &&
+                user.name.toLowerCase() ===
+                username.toLowerCase()
         );
 
-    return exact ||
-        data.data[0];
+    return exact || data.data[0];
 }
 
 
 // ============================================================
-// FETCH EVERYTHING
+// PROFILE DATA
 // ============================================================
 
-async function fetchUserData(
-    userId
-) {
-
+async function fetchProfileData(userId) {
     const urls = {
-
         profile:
-            'https://users.roblox.com/v1/users/' +
-            userId,
+            `https://users.roblox.com/v1/users/${userId}`,
 
         avatar:
-            'https://avatar.roblox.com/v1/users/' +
-            userId +
-            '/avatar',
+            `https://thumbnails.roblox.com/v1/users/avatar` +
+            `?userIds=${userId}` +
+            `&size=720x720` +
+            `&format=Png` +
+            `&isCircular=false`,
 
-        wearing:
-            'https://avatar.roblox.com/v1/users/' +
-            userId +
-            '/currently-wearing',
-
-        thumbnail:
-            'https://thumbnails.roblox.com/v1/users/avatar' +
-            '?userIds=' +
-            userId +
-            '&size=420x420' +
-            '&format=Png' +
-            '&isCircular=false',
+        headshot:
+            `https://thumbnails.roblox.com/v1/users/avatar-headshot` +
+            `?userIds=${userId}` +
+            `&size=420x420` +
+            `&format=Png` +
+            `&isCircular=false`,
 
         followers:
-            'https://friends.roblox.com/v1/users/' +
-            userId +
-            '/followers/count',
-
-        following:
-            'https://friends.roblox.com/v1/users/' +
-            userId +
-            '/followings/count',
+            `https://friends.roblox.com/v1/users/${userId}/followers/count`,
 
         friends:
-            'https://friends.roblox.com/v1/users/' +
-            userId +
-            '/friends/count',
+            `https://friends.roblox.com/v1/users/${userId}/friends/count`,
+
+        following:
+            `https://friends.roblox.com/v1/users/${userId}/followings/count`,
 
         usernameHistory:
-            'https://users.roblox.com/v1/users/' +
-            userId +
-            '/username-history',
+            `https://users.roblox.com/v1/users/${userId}/username-history`,
 
         groups:
-            'https://groups.roblox.com/v1/users/' +
-            userId +
-            '/groups/roles',
+            `https://groups.roblox.com/v1/users/${userId}/groups/roles`,
 
         games:
-            'https://games.roblox.com/v2/users/' +
-            userId +
-            '/games?limit=50&sortOrder=Asc',
+            `https://games.roblox.com/v2/users/${userId}/games` +
+            `?accessFilter=Public` +
+            `&sortOrder=Desc` +
+            `&limit=50`,
 
-        favorites:
-            'https://games.roblox.com/v2/users/' +
-            userId +
-            '/favorite/games?limit=50&sortOrder=Asc',
+        avatarRig:
+            `https://avatar.roblox.com/v2/avatar/users/${userId}/avatar`,
 
         presence:
-            'https://presence.roblox.com/v1/presence/users'
-    };
+            `https://presence.roblox.com/v1/presence/users`,
 
+        badges:
+            `https://badges.roblox.com/v1/users/${userId}/badges` +
+            `?limit=100&sortOrder=Desc`
+    };
 
     const results =
         await Promise.allSettled([
+            optionalFetch(urls.profile),
+            optionalFetch(urls.avatar),
+            optionalFetch(urls.headshot),
+            optionalFetch(urls.followers),
+            optionalFetch(urls.friends),
+            optionalFetch(urls.following),
+            optionalFetch(urls.usernameHistory),
+            optionalFetch(urls.groups),
+            optionalFetch(urls.games),
+            optionalFetch(urls.avatarRig),
+            optionalFetch(urls.badges),
 
-            optionalRequest(
-                urls.profile
-            ),
-
-            optionalRequest(
-                urls.avatar
-            ),
-
-            optionalRequest(
-                urls.wearing
-            ),
-
-            optionalRequest(
-                urls.thumbnail
-            ),
-
-            optionalRequest(
-                urls.followers
-            ),
-
-            optionalRequest(
-                urls.following
-            ),
-
-            optionalRequest(
-                urls.friends
-            ),
-
-            optionalRequest(
-                urls.usernameHistory
-            ),
-
-            optionalRequest(
-                urls.groups
-            ),
-
-            optionalRequest(
-                urls.games
-            ),
-
-            optionalRequest(
-                urls.favorites
-            ),
-
-            optionalRequest(
+            optionalFetch(
                 urls.presence,
                 {
                     method: 'POST',
@@ -709,95 +509,95 @@ async function fetchUserData(
                         })
                 }
             )
-
         ]);
 
-
-    function result(index) {
-
-        const item =
+    function resultAt(index) {
+        const result =
             results[index];
 
         if (
-            item &&
-            item.status ===
-            'fulfilled'
+            result &&
+            result.status === 'fulfilled'
         ) {
-            return item.value;
+            return result.value;
         }
 
         return null;
     }
 
-
     return {
-
         profile:
-            result(0),
+            resultAt(0),
 
         avatar:
-            result(1),
+            resultAt(1),
 
-        wearing:
-            result(2),
-
-        thumbnail:
-            result(3),
+        headshot:
+            resultAt(2),
 
         followers:
-            result(4),
-
-        following:
-            result(5),
+            resultAt(3),
 
         friends:
-            result(6),
+            resultAt(4),
+
+        following:
+            resultAt(5),
 
         usernameHistory:
-            result(7),
+            resultAt(6),
 
         groups:
-            result(8),
+            resultAt(7),
 
         games:
-            result(9),
+            resultAt(8),
 
-        favorites:
-            result(10),
+        avatarRig:
+            resultAt(9),
+
+        badges:
+            resultAt(10),
 
         presence:
-            result(11)
+            resultAt(11)
     };
 }
 
 
 // ============================================================
-// PROFILE
+// PROFILE LINKS
 // ============================================================
 
-function updateProfile(
-    user,
-    data
-) {
+function profileUrl(userId) {
+    return `https://www.roblox.com/users/${userId}/profile`;
+}
 
-    const profile =
-        data.profile ||
-        user;
 
-    const userId =
-        profile.id ||
-        user.id;
+function groupUrl(groupId) {
+    return `https://www.roblox.com/groups/${groupId}`;
+}
 
+
+function gameUrl(placeId) {
+    return `https://www.roblox.com/games/${placeId}`;
+}
+
+
+// ============================================================
+// IDENTITY
+// ============================================================
+
+function updateIdentity(user, profile) {
     const username =
-        profile.name ||
-        user.name ||
+        profile?.name ||
+        user?.name ||
         'Unknown';
 
     const displayName =
-        profile.displayName ||
-        user.displayName ||
+        profile?.displayName ||
+        user?.displayName ||
         username;
-
 
     setText(
         'displayName',
@@ -806,57 +606,13 @@ function updateProfile(
 
     setText(
         'userName',
-        '@' + username
+        `@${username}`
     );
 
     setText(
         'userId',
-        userId
+        user?.id
     );
-
-    setText(
-        'infoUsername',
-        username
-    );
-
-    setText(
-        'infoDisplayName',
-        displayName
-    );
-
-    setText(
-        'createdDate',
-        formatDateOnly(
-            profile.created
-        )
-    );
-
-    setText(
-        'accountAge',
-        calculateAge(
-            profile.created
-        )
-    );
-
-    setText(
-        'description',
-        profile.description ||
-        'No description.'
-    );
-
-
-    const verified =
-        Boolean(
-            profile.hasVerifiedBadge
-        );
-
-    setText(
-        'verifiedText',
-        verified
-            ? 'Yes'
-            : 'No'
-    );
-
 
     const badge =
         document.getElementById(
@@ -864,97 +620,404 @@ function updateProfile(
         );
 
     if (badge) {
-
         badge.classList.toggle(
             'hidden',
-            !verified
+            !profile?.hasVerifiedBadge
         );
     }
 
+    const profileLink =
+        document.getElementById(
+            'profileLink'
+        );
 
-    const profileUrl =
-        'https://www.roblox.com/users/' +
-        userId +
-        '/profile';
+    if (profileLink) {
+        profileLink.href =
+            profileUrl(user.id);
+
+        profileLink.target =
+            '_blank';
+
+        profileLink.rel =
+            'noopener noreferrer';
+    }
+
+    const usernameLink =
+        document.getElementById(
+            'usernameProfileLink'
+        );
+
+    if (usernameLink) {
+        usernameLink.href =
+            profileUrl(user.id);
+
+        usernameLink.target =
+            '_blank';
+
+        usernameLink.rel =
+            'noopener noreferrer';
+    }
+}
 
 
-    setLink(
-        'profileLink',
-        profileUrl
+// ============================================================
+// AVATAR
+// ============================================================
+
+function updateAvatar(data) {
+    let avatarUrl = '';
+
+    if (
+        data.avatar &&
+        Array.isArray(data.avatar.data) &&
+        data.avatar.data[0]?.imageUrl
+    ) {
+        avatarUrl =
+            data.avatar.data[0].imageUrl;
+    }
+
+    if (
+        !avatarUrl &&
+        data.headshot &&
+        Array.isArray(data.headshot.data) &&
+        data.headshot.data[0]?.imageUrl
+    ) {
+        avatarUrl =
+            data.headshot.data[0].imageUrl;
+    }
+
+    if (avatarUrl) {
+        init3DViewer(
+            avatarUrl
+        );
+    } else {
+        showAvatarFallback();
+    }
+
+    const avatarImage =
+        document.getElementById(
+            'avatarImage'
+        );
+
+    if (
+        avatarImage &&
+        avatarUrl
+    ) {
+        avatarImage.src =
+            avatarUrl;
+
+        avatarImage.alt =
+            'Roblox avatar';
+    }
+}
+
+
+function showAvatarFallback() {
+    const container =
+        document.getElementById(
+            'canvasContainer'
+        );
+
+    if (!container) {
+        return;
+    }
+
+    container.innerHTML = `
+        <div class="avatar-fallback">
+            ?
+        </div>
+    `;
+}
+
+
+// ============================================================
+// 3D VIEWER
+// ============================================================
+
+function init3DViewer(imageUrl) {
+    const container =
+        document.getElementById(
+            'canvasContainer'
+        );
+
+    if (!container) {
+        return;
+    }
+
+    container.innerHTML = '';
+
+    if (!window.THREE) {
+        showAvatarFallback();
+        return;
+    }
+
+    if (renderer) {
+        try {
+            renderer.dispose();
+        } catch (_) {}
+    }
+
+    scene =
+        new THREE.Scene();
+
+    camera =
+        new THREE.PerspectiveCamera(
+            35,
+            1,
+            0.1,
+            100
+        );
+
+    camera.position.z =
+        3.2;
+
+    renderer =
+        new THREE.WebGLRenderer({
+            antialias: true,
+            alpha: true
+        });
+
+    renderer.setSize(
+        260,
+        260,
+        false
     );
 
-    setLink(
-        'profileLinkBottom',
-        profileUrl
+    renderer.setPixelRatio(
+        Math.min(
+            window.devicePixelRatio || 1,
+            2
+        )
     );
 
-
-    setLink(
-        'avatarLink',
-        'https://www.roblox.com/users/' +
-        userId +
-        '/avatar'
+    container.appendChild(
+        renderer.domElement
     );
 
-    setLink(
-        'friendsLink',
-        'https://www.roblox.com/users/' +
-        userId +
-        '/friends'
+    const textureLoader =
+        new THREE.TextureLoader();
+
+    textureLoader.crossOrigin =
+        'anonymous';
+
+    textureLoader.load(
+        imageUrl,
+
+        function (texture) {
+            const geometry =
+                new THREE.PlaneGeometry(
+                    2.5,
+                    2.5
+                );
+
+            const material =
+                new THREE.MeshBasicMaterial({
+                    map: texture,
+                    transparent: true,
+                    side: THREE.DoubleSide
+                });
+
+            avatarMesh =
+                new THREE.Mesh(
+                    geometry,
+                    material
+                );
+
+            scene.add(
+                avatarMesh
+            );
+
+            currentRotationVelocity =
+                targetRotationVelocity;
+
+            animate3D();
+        },
+
+        undefined,
+
+        function () {
+            showAvatarFallback();
+        }
     );
 
-    setLink(
-        'followersLink',
-        'https://www.roblox.com/users/' +
-        userId +
-        '/followers'
+    container.addEventListener(
+        'pointerdown',
+        function (event) {
+            isDragging = true;
+
+            previousMousePosition = {
+                x: event.clientX,
+                y: event.clientY
+            };
+
+            container.setPointerCapture?.(
+                event.pointerId
+            );
+        }
     );
 
-    setLink(
-        'followingLink',
-        'https://www.roblox.com/users/' +
-        userId +
-        '/following'
+    container.addEventListener(
+        'pointerup',
+        function () {
+            isDragging = false;
+        }
+    );
+
+    container.addEventListener(
+        'pointerleave',
+        function () {
+            isDragging = false;
+        }
+    );
+}
+
+
+window.addEventListener(
+    'pointermove',
+    function (event) {
+        if (
+            !isDragging ||
+            !avatarMesh
+        ) {
+            return;
+        }
+
+        const deltaX =
+            event.clientX -
+            previousMousePosition.x;
+
+        const deltaY =
+            event.clientY -
+            previousMousePosition.y;
+
+        avatarMesh.rotation.y +=
+            deltaX * 0.01;
+
+        avatarMesh.rotation.x +=
+            deltaY * 0.006;
+
+        currentRotationVelocity =
+            deltaX * 0.0005;
+
+        previousMousePosition = {
+            x: event.clientX,
+            y: event.clientY
+        };
+    }
+);
+
+
+function animate3D() {
+    if (
+        !renderer ||
+        !scene ||
+        !camera
+    ) {
+        return;
+    }
+
+    requestAnimationFrame(
+        animate3D
+    );
+
+    if (
+        avatarMesh &&
+        !isDragging
+    ) {
+        currentRotationVelocity +=
+            (
+                targetRotationVelocity -
+                currentRotationVelocity
+            ) * 0.05;
+
+        avatarMesh.rotation.y +=
+            currentRotationVelocity;
+
+        avatarMesh.rotation.x *=
+            0.96;
+    }
+
+    renderer.render(
+        scene,
+        camera
     );
 }
 
 
 // ============================================================
-// COUNTS
+// STATS
 // ============================================================
 
-function updateCounts(data) {
+function updateStats(data) {
+    const created =
+        data.profile?.created;
+
+    setText(
+        'createdDate',
+        formatDate(created)
+    );
+
+    setText(
+        'accountAge',
+        getAccountAge(created)
+    );
 
     setText(
         'followersCount',
-        data.followers?.count !==
-        undefined
+        data.followers?.count !== undefined
             ? formatNumber(
                 data.followers.count
             )
             : 'N/A'
     );
 
+    setText(
+        'friendsCount',
+        data.friends?.count !== undefined
+            ? formatNumber(
+                data.friends.count
+            )
+            : 'N/A'
+    );
 
     setText(
         'followingCount',
-        data.following?.count !==
-        undefined
+        data.following?.count !== undefined
             ? formatNumber(
                 data.following.count
             )
             : 'N/A'
     );
 
+    setText(
+        'rigType',
+        data.avatarRig?.playerAvatarType ||
+        'N/A'
+    );
 
     setText(
-        'friendsCount',
-        data.friends?.count !==
-        undefined
-            ? formatNumber(
-                data.friends.count
-            )
-            : 'N/A'
+        'description',
+        data.profile?.description ||
+        'No description'
+    );
+
+    setText(
+        'isBanned',
+        data.profile?.isBanned
+            ? 'Yes'
+            : 'No'
+    );
+
+    setText(
+        'hasVerifiedBadge',
+        data.profile?.hasVerifiedBadge
+            ? 'Yes'
+            : 'No'
+    );
+
+    setText(
+        'joinDate',
+        formatDateTime(created)
     );
 }
 
@@ -963,82 +1026,56 @@ function updateCounts(data) {
 // PRESENCE
 // ============================================================
 
-function updatePresence(
-    presenceData
-) {
-
-    let presence = null;
-
-    if (
-        presenceData &&
-        Array.isArray(
-            presenceData.userPresences
-        ) &&
-        presenceData.userPresences.length
-    ) {
-
-        presence =
-            presenceData.userPresences[0];
-    }
-
-
+function updatePresence(data) {
     const status =
         document.getElementById(
             'onlineStatus'
         );
-
 
     const lastOnline =
         document.getElementById(
             'lastOnline'
         );
 
+    const location =
+        document.getElementById(
+            'lastLocation'
+        );
+
+    if (!status) {
+        return;
+    }
+
+    const presence =
+        data?.userPresences?.[0] ||
+        data?.presence?.userPresences?.[0];
 
     if (!presence) {
+        status.textContent =
+            'UNKNOWN';
 
-        setText(
-            'presenceStatus',
-            'Unknown'
-        );
-
-        setText(
-            'presenceLocation',
-            'N/A'
-        );
-
-        setText(
-            'presenceLastOnline',
-            'N/A'
-        );
-
-        if (status) {
-
-            status.textContent =
-                'UNKNOWN';
-
-            status.className =
-                'status-pill';
-        }
+        status.className =
+            'status-pill';
 
         if (lastOnline) {
-
             lastOnline.textContent =
-                'Status unavailable';
+                'Unavailable';
+        }
+
+        if (location) {
+            location.textContent =
+                'N/A';
         }
 
         return;
     }
-
 
     const type =
         Number(
             presence.userPresenceType
         );
 
-
-    let text =
-        'OFFLINE';
-
+    let text = 'OFFLINE';
 
     if (type === 1) {
         text = 'ONLINE';
@@ -1052,539 +1089,46 @@ function updatePresence(
         text = 'IN STUDIO';
     }
 
+    status.textContent =
+        text;
 
-    const location =
-        presence.lastLocation ||
-        'N/A';
+    status.className =
+        type === 0
+            ? 'status-pill'
+            : 'status-pill online';
 
-
-    const last =
-        presence.lastOnline
-            ? formatDate(
-                presence.lastOnline
-            )
-            : (
+    if (location) {
+        location.textContent =
+            presence.lastLocation ||
+            (
                 type === 0
-                    ? 'No recent time available'
-                    : 'Currently active'
+                    ? 'Offline'
+                    : 'Active'
             );
-
-
-    setText(
-        'presenceStatus',
-        text
-    );
-
-    setText(
-        'presenceLocation',
-        location
-    );
-
-    setText(
-        'presenceLastOnline',
-        last
-    );
-
-
-    if (status) {
-
-        status.textContent =
-            text;
-
-        status.className =
-            type === 0
-                ? 'status-pill'
-                : 'status-pill online';
     }
-
 
     if (lastOnline) {
-
-        lastOnline.textContent =
-            type === 0
-                ? last
-                : location !== 'N/A'
-                    ? location
-                    : 'Active';
-    }
-}
-
-
-// ============================================================
-// AVATAR
-// ============================================================
-
-function updateAvatar(
-    data
-) {
-
-    let imageUrl = null;
-
-
-    if (
-        data.thumbnail &&
-        Array.isArray(
-            data.thumbnail.data
-        ) &&
-        data.thumbnail.data[0]
-    ) {
-
-        imageUrl =
-            data.thumbnail.data[0].imageUrl;
-    }
-
-
-    if (!imageUrl) {
-
-        imageUrl =
-            'https://tr.rbxcdn.com/30day-avatar/420/420/Avatar.png';
-    }
-
-
-    initAvatarViewer(
-        imageUrl
-    );
-
-
-    const avatar =
-        data.avatar;
-
-
-    if (avatar) {
-
-        setText(
-            'avatarType',
-            avatar.playerAvatarType ||
-            'N/A'
-        );
-
-
-        const scales =
-            avatar.scales;
-
-
-        if (scales) {
-
-            const scaleText = [
-
-                'Height ' +
-                (scales.height ?? 'N/A'),
-
-                'Width ' +
-                (scales.width ?? 'N/A'),
-
-                'Head ' +
-                (scales.head ?? 'N/A'),
-
-                'Body ' +
-                (scales.bodyType ?? 'N/A'),
-
-                'Proportion ' +
-                (scales.proportion ?? 'N/A')
-
-            ].join(' · ');
-
-
-            setText(
-                'avatarScale',
-                scaleText
-            );
-        }
-
-
-        const bodyColors =
-            avatar.bodyColors;
-
-
-        if (bodyColors) {
-
-            const colorText =
-                Object.keys(
-                    bodyColors
-                ).length +
-                ' body color values';
-
-
-            setText(
-                'bodyColors',
-                colorText
-            );
-        }
-
-    }
-
-
-    if (
-        data.wearing &&
-        Array.isArray(
-            data.wearing.assetIds
-        )
-    ) {
-
-        setText(
-            'wearingCount',
-            formatNumber(
-                data.wearing.assetIds.length
-            )
-        );
-
-
-        const assets =
-            document.getElementById(
-                'assetsList'
-            );
-
-
-        if (assets) {
-
-            assets.innerHTML =
-                data.wearing.assetIds
-                    .map(
-                        function (id) {
-
-                            return `
-                                <span class="asset">
-                                    Asset ${escapeHtml(id)}
-                                </span>
-                            `;
-                        }
-                    )
-                    .join('');
-        }
-    }
-}
-
-
-// ============================================================
-// AVATAR VIEWER
-// ============================================================
-
-function initAvatarViewer(
-    imageUrl
-) {
-
-    const container =
-        document.getElementById(
-            'canvasContainer'
-        );
-
-    if (!container) {
-        return;
-    }
-
-
-    container.innerHTML = '';
-
-
-    if (!window.THREE) {
-
-        const image =
-            document.createElement(
-                'img'
-            );
-
-        image.src =
-            imageUrl;
-
-        image.alt =
-            'Roblox avatar';
-
-        image.style.width =
-            '100%';
-
-        image.style.height =
-            '100%';
-
-        image.style.objectFit =
-            'contain';
-
-        container.appendChild(
-            image
-        );
-
-        return;
-    }
-
-
-    avatarScene =
-        new THREE.Scene();
-
-
-    avatarCamera =
-        new THREE.PerspectiveCamera(
-            35,
-            190 / 230,
-            0.1,
-            100
-        );
-
-
-    avatarCamera.position.z =
-        3;
-
-
-    avatarRenderer =
-        new THREE.WebGLRenderer({
-            antialias: true,
-            alpha: true
-        });
-
-
-    avatarRenderer.setSize(
-        190,
-        230
-    );
-
-
-    avatarRenderer.setPixelRatio(
-        Math.min(
-            window.devicePixelRatio || 1,
-            2
-        )
-    );
-
-
-    container.appendChild(
-        avatarRenderer.domElement
-    );
-
-
-    const geometry =
-        new THREE.PlaneGeometry(
-            2.4,
-            2.9
-        );
-
-
-    const loader =
-        new THREE.TextureLoader();
-
-
-    loader.crossOrigin =
-        'anonymous';
-
-
-    loader.load(
-
-        imageUrl,
-
-        function (texture) {
-
-            const material =
-                new THREE.MeshBasicMaterial({
-                    map: texture,
-                    transparent: true,
-                    side: THREE.DoubleSide
-                });
-
-
-            avatarMesh =
-                new THREE.Mesh(
-                    geometry,
-                    material
-                );
-
-
-            avatarScene.add(
-                avatarMesh
-            );
-
-
-            animateAvatar();
-        },
-
-        undefined,
-
-        function () {
-
-            console.warn(
-                'Avatar thumbnail could not be loaded.'
-            );
-
-            const material =
-                new THREE.MeshBasicMaterial({
-                    color: 0x6366f1
-                });
-
-
-            avatarMesh =
-                new THREE.Mesh(
-                    geometry,
-                    material
-                );
-
-
-            avatarScene.add(
-                avatarMesh
-            );
-
-
-            animateAvatar();
-        }
-    );
-
-
-    container.onmousedown =
-        function (event) {
-
-            dragging = true;
-
-            previousMouse = {
-                x: event.clientX,
-                y: event.clientY
-            };
-        };
-
-
-    container.ontouchstart =
-        function (event) {
-
-            if (!event.touches.length) {
-                return;
-            }
-
-            dragging = true;
-
-            previousMouse = {
-                x:
-                    event.touches[0].clientX,
-
-                y:
-                    event.touches[0].clientY
-            };
-        };
-}
-
-
-window.addEventListener(
-    'mousemove',
-    function (event) {
-
         if (
-            !dragging ||
-            !avatarMesh
+            presence.lastOnline
         ) {
-            return;
-        }
-
-
-        const dx =
-            event.clientX -
-            previousMouse.x;
-
-
-        const dy =
-            event.clientY -
-            previousMouse.y;
-
-
-        avatarMesh.rotation.y +=
-            dx * 0.01;
-
-
-        avatarMesh.rotation.x +=
-            dy * 0.005;
-
-
-        previousMouse = {
-            x: event.clientX,
-            y: event.clientY
-        };
-    }
-);
-
-
-window.addEventListener(
-    'mouseup',
-    function () {
-        dragging = false;
-    }
-);
-
-
-window.addEventListener(
-    'touchmove',
-    function (event) {
-
-        if (
-            !dragging ||
-            !avatarMesh ||
-            !event.touches.length
+            lastOnline.textContent =
+                formatDateTime(
+                    presence.lastOnline
+                );
+        } else if (
+            presence.lastOnlineTime
         ) {
-            return;
+            lastOnline.textContent =
+                formatDateTime(
+                    presence.lastOnlineTime
+                );
+        } else {
+            lastOnline.textContent =
+                type === 0
+                    ? 'Not provided by Roblox'
+                    : 'Currently active';
         }
-
-
-        const dx =
-            event.touches[0].clientX -
-            previousMouse.x;
-
-
-        const dy =
-            event.touches[0].clientY -
-            previousMouse.y;
-
-
-        avatarMesh.rotation.y +=
-            dx * 0.01;
-
-
-        avatarMesh.rotation.x +=
-            dy * 0.005;
-
-
-        previousMouse = {
-            x:
-                event.touches[0].clientX,
-
-            y:
-                event.touches[0].clientY
-        };
-    },
-    {
-        passive: true
     }
-);
-
-
-window.addEventListener(
-    'touchend',
-    function () {
-        dragging = false;
-    }
-);
-
-
-function animateAvatar() {
-
-    if (
-        !avatarRenderer ||
-        !avatarScene ||
-        !avatarCamera
-    ) {
-        return;
-    }
-
-
-    requestAnimationFrame(
-        animateAvatar
-    );
-
-
-    if (
-        avatarMesh &&
-        !dragging
-    ) {
-
-        avatarMesh.rotation.y +=
-            0.003;
-    }
-
-
-    avatarRenderer.render(
-        avatarScene,
-        avatarCamera
-    );
 }
 
 
@@ -1592,48 +1136,76 @@ function animateAvatar() {
 // USERNAME HISTORY
 // ============================================================
 
-function updateUsernameHistory(
-    history
-) {
-
+function updateUsernameHistory(history) {
     const container =
         document.getElementById(
-            'usernameList'
+            'pastUsernames'
         );
 
     if (!container) {
         return;
     }
 
+    const items =
+        Array.isArray(history?.data)
+            ? history.data
+            : [];
 
-    if (
-        !history ||
-        !Array.isArray(
-            history.data
-        ) ||
-        !history.data.length
-    ) {
-
+    if (!items.length) {
         container.innerHTML =
-            '<span class="empty">No previous usernames found.</span>';
+            '<span class="empty-hint">No previous usernames found</span>';
 
         return;
     }
 
+    const visible =
+        showingAllUsernames
+            ? items
+            : items.slice(0, 6);
 
     container.innerHTML =
-        history.data
-            .map(
-                function (item) {
-
-                    return `
-                        <span class="tag">
-                            ${escapeHtml(item.name)}
-                        </span>
-                    `;
-                }
-            )
+        visible
+            .map(item => `
+                <span class="tag">
+                    ${escapeHtml(item.name)}
+                </span>
+            `)
             .join('');
+
+    if (items.length > 6) {
+        container.innerHTML += `
+            <button
+                type="button"
+                class="show-all-btn"
+                id="showAllUsernames"
+            >
+                ${
+                    showingAllUsernames
+                        ? 'Show Less'
+                        : `Show All (${items.length})`
+                }
+            </button>
+        `;
+
+        const button =
+            document.getElementById(
+                'showAllUsernames'
+            );
+
+        if (button) {
+            button.addEventListener(
+                'click',
+                function () {
+                    showingAllUsernames =
+                        !showingAllUsernames;
+
+                    updateUsernameHistory(
+                        history
+                    );
+                }
+            );
+        }
+    }
 }
 
 
@@ -1641,10 +1213,7 @@ function updateUsernameHistory(
 // GROUPS
 // ============================================================
 
-function updateGroups(
-    groups
-) {
-
+function updateGroups(groups) {
     const container =
         document.getElementById(
             'groupsList'
@@ -1654,74 +1223,101 @@ function updateGroups(
         return;
     }
 
+    const items =
+        Array.isArray(groups?.data)
+            ? groups.data
+            : [];
 
-    if (
-        !groups ||
-        !Array.isArray(
-            groups.data
-        ) ||
-        !groups.data.length
-    ) {
-
+    if (!items.length) {
         container.innerHTML =
-            '<span class="empty">No public groups found.</span>';
+            '<span class="empty-hint">No public groups found</span>';
 
         return;
     }
 
+    const visible =
+        showingAllGroups
+            ? items
+            : items.slice(0, 6);
 
     container.innerHTML =
-        groups.data
-            .map(
-                function (item) {
+        visible
+            .map(groupData => {
+                const group =
+                    groupData?.group;
 
-                    const group =
-                        item.group ||
-                        {};
+                const role =
+                    groupData?.role;
 
-                    const role =
-                        item.role ||
-                        {};
+                if (!group?.id) {
+                    return '';
+                }
 
-
-                    const id =
-                        group.id;
-
-
-                    const url =
-                        id
-                            ? 'https://www.roblox.com/communities/' +
-                              id +
-                              '/about'
-                            : '#';
-
-
-                    return `
-                        <span class="tag">
-
-                            <a
-                                href="${url}"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                            >
+                return `
+                    <a
+                        class="group-item"
+                        href="${groupUrl(group.id)}"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                    >
+                        <div class="group-item-main">
+                            <strong>
                                 ${escapeHtml(
                                     group.name ||
-                                    'Unknown Group'
+                                    'Unknown group'
                                 )}
-                            </a>
+                            </strong>
 
-                            ·
+                            <span>
+                                ${escapeHtml(
+                                    role?.name ||
+                                    'Member'
+                                )}
+                            </span>
+                        </div>
 
-                            ${escapeHtml(
-                                role.name ||
-                                'Member'
-                            )}
-
+                        <span class="external-arrow">
+                            ↗
                         </span>
-                    `;
-                }
-            )
+                    </a>
+                `;
+            })
             .join('');
+
+    if (items.length > 6) {
+        container.innerHTML += `
+            <button
+                type="button"
+                class="show-all-btn"
+                id="showAllGroups"
+            >
+                ${
+                    showingAllGroups
+                        ? 'Show Less'
+                        : `Show All (${items.length})`
+                }
+            </button>
+        `;
+
+        const button =
+            document.getElementById(
+                'showAllGroups'
+            );
+
+        if (button) {
+            button.addEventListener(
+                'click',
+                function () {
+                    showingAllGroups =
+                        !showingAllGroups;
+
+                    updateGroups(
+                        groups
+                    );
+                }
+            );
+        }
+    }
 }
 
 
@@ -1729,155 +1325,432 @@ function updateGroups(
 // EXPERIENCES
 // ============================================================
 
-function updateGames(
-    games
-) {
-
+function updateGames(games) {
     const container =
         document.getElementById(
             'gamesContainer'
+        );
+
+    const visitsElement =
+        document.getElementById(
+            'placeVisits'
         );
 
     if (!container) {
         return;
     }
 
+    const items =
+        Array.isArray(games?.data)
+            ? games.data
+            : [];
 
-    if (
-        !games ||
-        !Array.isArray(
-            games.data
-        ) ||
-        !games.data.length
-    ) {
-
+    if (!items.length) {
         container.innerHTML =
-            '<span class="empty">No public experiences found.</span>';
+            '<span class="empty-hint">No public experiences found</span>';
+
+        if (visitsElement) {
+            visitsElement.textContent =
+                'N/A';
+        }
 
         return;
     }
 
+    const visible =
+        showingAllGames
+            ? items
+            : items.slice(0, 6);
+
+    let totalVisits = 0;
+
+    items.forEach(game => {
+        totalVisits +=
+            Number(
+                game?.placeVisits
+            ) || 0;
+    });
 
     container.innerHTML =
-        games.data
-            .map(
-                function (game) {
+        visible
+            .map(game => {
+                const id =
+                    game?.id ||
+                    game?.rootPlace?.id;
 
-                    const universeId =
-                        game.id ||
-                        game.universeId;
+                const name =
+                    game?.name ||
+                    'Unnamed experience';
 
+                const visits =
+                    Number(
+                        game?.placeVisits
+                    ) || 0;
 
-                    const placeId =
-                        game.rootPlaceId ||
-                        game.placeId;
+                const description =
+                    game?.description ||
+                    'No description available.';
 
+                const url =
+                    id
+                        ? gameUrl(id)
+                        : '#';
 
-                    const url =
-                        universeId
-                            ? 'https://www.roblox.com/games/' +
-                              (
-                                  placeId ||
-                                  universeId
-                              )
-                            : '#';
+                return `
+                    <a
+                        class="exp-card"
+                        href="${url}"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                    >
+                        <div class="exp-card-content">
+                            <h4>
+                                ${escapeHtml(name)}
+                            </h4>
 
+                            <p>
+                                ${escapeHtml(
+                                    description
+                                )}
+                            </p>
 
-                    const name =
-                        game.name ||
-                        'Unnamed Experience';
+                            <div class="exp-meta">
+                                <span>
+                                    Visits:
+                                    ${formatNumber(visits)}
+                                </span>
 
-
-                    const visits =
-                        Number(
-                            game.placeVisits
-                        ) || 0;
-
-
-                    const creator =
-                        game.creator?.name ||
-                        'Unknown';
-
-
-                    const creatorId =
-                        game.creator?.id;
-
-
-                    const creatorUrl =
-                        creatorId
-                            ? 'https://www.roblox.com/users/' +
-                              creatorId +
-                              '/profile'
-                            : '#';
-
-
-                    return `
-                        <article class="game-card">
-
-                            <div class="game-card-top">
-
-                                <div>
-                                    <h4>
-
-                                        <a
-                                            href="${url}"
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                        >
-                                            ${escapeHtml(name)}
-                                        </a>
-
-                                    </h4>
-
-                                    <p>
-                                        ${formatNumber(visits)}
-                                        visits
-                                    </p>
-
-                                </div>
-
+                                ${
+                                    id
+                                        ? `<span>ID: ${escapeHtml(id)}</span>`
+                                        : ''
+                                }
                             </div>
+                        </div>
 
-
-                            <div class="game-meta">
-
-                                <span class="meta">
-                                    Universe:
-                                    ${escapeHtml(
-                                        universeId ||
-                                        'N/A'
-                                    )}
-                                </span>
-
-                                <span class="meta">
-                                    Place:
-                                    ${escapeHtml(
-                                        placeId ||
-                                        'N/A'
-                                    )}
-                                </span>
-
-                                <span class="meta">
-                                    Creator:
-                                    <a
-                                        href="${creatorUrl}"
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        style="color:inherit"
-                                    >
-                                        ${escapeHtml(
-                                            creator
-                                        )}
-                                    </a>
-                                </span>
-
-                            </div>
-
-                        </article>
-                    `;
-                }
-            )
+                        <span class="external-arrow">
+                            ↗
+                        </span>
+                    </a>
+                `;
+            })
             .join('');
+
+    if (visitsElement) {
+        visitsElement.textContent =
+            formatNumber(
+                totalVisits
+            );
+    }
+
+    if (items.length > 6) {
+        container.innerHTML += `
+            <button
+                type="button"
+                class="show-all-btn"
+                id="showAllGames"
+            >
+                ${
+                    showingAllGames
+                        ? 'Show Less'
+                        : `Show All (${items.length})`
+                }
+            </button>
+        `;
+
+        const button =
+            document.getElementById(
+                'showAllGames'
+            );
+
+        if (button) {
+            button.addEventListener(
+                'click',
+                function (event) {
+                    event.preventDefault();
+
+                    showingAllGames =
+                        !showingAllGames;
+
+                    updateGames(
+                        games
+                    );
+                }
+            );
+        }
+    }
+}
+
+
+// ============================================================
+// BADGES
+// ============================================================
+
+function updateBadges(badges) {
+    const container =
+        document.getElementById(
+            'badgesContainer'
+        );
+
+    if (!container) {
+        return;
+    }
+
+    const items =
+        Array.isArray(badges?.data)
+            ? badges.data
+            : [];
+
+    if (!items.length) {
+        container.innerHTML =
+            '<span class="empty-hint">No badges available</span>';
+
+        return;
+    }
+
+    container.innerHTML =
+        items
+            .slice(0, 12)
+            .map(badge => `
+                <div class="badge-item">
+                    <strong>
+                        ${escapeHtml(
+                            badge.name ||
+                            'Badge'
+                        )}
+                    </strong>
+
+                    <span>
+                        ${escapeHtml(
+                            badge.description ||
+                            ''
+                        )}
+                    </span>
+                </div>
+            `)
+            .join('');
+}
+
+
+// ============================================================
+// COPY USER ID
+// ============================================================
+
+async function copyUserId() {
+    if (!currentUser?.id) {
+        return;
+    }
+
+    try {
+        await navigator.clipboard.writeText(
+            String(currentUser.id)
+        );
+
+        const button =
+            document.getElementById(
+                'copyUserId'
+            );
+
+        if (button) {
+            const original =
+                button.textContent;
+
+            button.textContent =
+                'Copied!';
+
+            setTimeout(
+                () => {
+                    button.textContent =
+                        original;
+                },
+                1500
+            );
+        }
+
+    } catch (error) {
+        console.warn(
+            'Could not copy User ID:',
+            error
+        );
+    }
+}
+
+
+// ============================================================
+// SHARE
+// ============================================================
+
+async function shareProfile() {
+    if (!currentUser?.name) {
+        return;
+    }
+
+    const url =
+        profileUrl(
+            currentUser.id
+        );
+
+    try {
+        if (
+            navigator.share
+        ) {
+            await navigator.share({
+                title:
+                    `${currentUser.name} - RoSearcher`,
+
+                text:
+                    `Roblox profile for @${currentUser.name}`,
+
+                url
+            });
+
+            return;
+        }
+
+        await navigator.clipboard.writeText(
+            url
+        );
+
+        const button =
+            document.getElementById(
+                'shareProfile'
+            );
+
+        if (button) {
+            const original =
+                button.textContent;
+
+            button.textContent =
+                'Link Copied!';
+
+            setTimeout(
+                () => {
+                    button.textContent =
+                        original;
+                },
+                1500
+            );
+        }
+
+    } catch (error) {
+        console.warn(
+            'Share failed:',
+            error
+        );
+    }
+}
+
+
+// ============================================================
+// BIND ACTION BUTTONS
+// ============================================================
+
+function bindActionButtons() {
+    const copyButton =
+        document.getElementById(
+            'copyUserId'
+        );
+
+    if (copyButton) {
+        copyButton.onclick =
+            copyUserId;
+    }
+
+    const shareButton =
+        document.getElementById(
+            'shareProfile'
+        );
+
+    if (shareButton) {
+        shareButton.onclick =
+            shareProfile;
+    }
+}
+
+
+// ============================================================
+// SETTINGS
+// ============================================================
+
+function initSettings() {
+    const settingsButton =
+        document.getElementById(
+            'settingsBtn'
+        );
+
+    const settingsPanel =
+        document.getElementById(
+            'settingsPanel'
+        );
+
+    const closeSettings =
+        document.getElementById(
+            'closeSettings'
+        );
+
+    if (
+        settingsButton &&
+        settingsPanel
+    ) {
+        settingsButton.addEventListener(
+            'click',
+            function () {
+                settingsPanel.classList.toggle(
+                    'hidden'
+                );
+            }
+        );
+    }
+
+    if (
+        closeSettings &&
+        settingsPanel
+    ) {
+        closeSettings.addEventListener(
+            'click',
+            function () {
+                settingsPanel.classList.add(
+                    'hidden'
+                );
+            }
+        );
+    }
+
+    const themeSelect =
+        document.getElementById(
+            'themeSelect'
+        );
+
+    if (themeSelect) {
+        const saved =
+            localStorage.getItem(
+                'rosearcher-theme'
+            );
+
+        if (saved) {
+            themeSelect.value =
+                saved;
+
+            document.documentElement.dataset.theme =
+                saved;
+        }
+
+        themeSelect.addEventListener(
+            'change',
+            function () {
+                const value =
+                    themeSelect.value;
+
+                document.documentElement.dataset.theme =
+                    value;
+
+                localStorage.setItem(
+                    'rosearcher-theme',
+                    value
+                );
+            }
+        );
+    }
 }
 
 
@@ -1886,13 +1759,14 @@ function updateGames(
 // ============================================================
 
 async function performSearch() {
+    if (!usernameInput) {
+        return;
+    }
 
     const username =
-        usernameInput?.value?.trim();
-
+        usernameInput.value.trim();
 
     if (!username) {
-
         showError(
             'Enter a Roblox username first.',
             false
@@ -1901,146 +1775,136 @@ async function performSearch() {
         return;
     }
 
+    const requestId =
+        ++currentRequestId;
 
-    const currentRequest =
-        ++requestNumber;
-
-
-    showLoading(true);
+    showingAllUsernames = false;
+    showingAllGroups = false;
+    showingAllGames = false;
 
     clearError();
-
+    showLoading(true);
     showProfile(false);
-
 
     if (searchBtn) {
         searchBtn.disabled =
             true;
+
+        searchBtn.classList.add(
+            'loading'
+        );
     }
 
-
     try {
-
         const user =
-            await findUser(
+            await findRobloxUser(
                 username
             );
 
-
         if (
-            currentRequest !==
-            requestNumber
+            requestId !==
+            currentRequestId
         ) {
             return;
         }
 
-
         if (!user) {
-
             throw new Error(
-                'No Roblox user named "' +
-                username +
-                '" was found.'
+                `No Roblox user named "${username}" was found.`
             );
         }
 
+        currentUser =
+            user;
 
         const data =
-            await fetchUserData(
+            await fetchProfileData(
                 user.id
             );
 
-
         if (
-            currentRequest !==
-            requestNumber
+            requestId !==
+            currentRequestId
         ) {
             return;
         }
 
+        currentData =
+            data;
 
-        updateProfile(
+        updateIdentity(
             user,
-            data
+            data.profile
         );
-
-
-        updateCounts(
-            data
-        );
-
-
-        updatePresence(
-            data.presence
-        );
-
 
         updateAvatar(
             data
         );
 
+        updateStats(
+            data
+        );
+
+        updatePresence(
+            data.presence
+        );
 
         updateUsernameHistory(
             data.usernameHistory
         );
 
-
         updateGroups(
             data.groups
         );
-
 
         updateGames(
             data.games
         );
 
+        updateBadges(
+            data.badges
+        );
+
+        bindActionButtons();
 
         showProfile(true);
 
-
-        window.scrollTo({
-            top:
-                profileContainer.offsetTop -
-                20,
-            behavior: 'smooth'
-        });
-
+        updateUrl(
+            username
+        );
 
     } catch (error) {
-
         console.error(
             'RoSearcher error:',
             error
         );
 
-
         if (
-            currentRequest !==
-            requestNumber
+            requestId !==
+            currentRequestId
         ) {
             return;
         }
 
-
         showError(
             error?.message ||
-            'Something went wrong while searching Roblox.',
-            true
+            'Something went wrong while searching Roblox.'
         );
 
-
     } finally {
-
         if (
-            currentRequest ===
-            requestNumber
+            requestId ===
+            currentRequestId
         ) {
-
             showLoading(false);
 
             if (searchBtn) {
                 searchBtn.disabled =
                     false;
+
+                searchBtn.classList.remove(
+                    'loading'
+                );
             }
         }
     }
@@ -2048,28 +1912,50 @@ async function performSearch() {
 
 
 // ============================================================
-// URL SEARCH
+// URL
 // ============================================================
 
-function loadSearchFromUrl() {
-
+function updateUrl(username) {
     try {
+        const url =
+            new URL(
+                window.location.href
+            );
 
+        url.searchParams.set(
+            'user',
+            username
+        );
+
+        window.history.replaceState(
+            {},
+            '',
+            url
+        );
+
+    } catch (error) {
+        console.warn(
+            'Could not update URL:',
+            error
+        );
+    }
+}
+
+
+function loadUsernameFromUrl() {
+    try {
         const params =
             new URLSearchParams(
                 window.location.search
             );
 
-
         const username =
             params.get('user');
-
 
         if (
             username &&
             usernameInput
         ) {
-
             usernameInput.value =
                 username;
 
@@ -2077,13 +1963,24 @@ function loadSearchFromUrl() {
         }
 
     } catch (error) {
-
         console.warn(
-            'URL search failed:',
+            'Could not read URL:',
             error
         );
     }
 }
 
 
-loadSearchFromUrl();
+// ============================================================
+// STARTUP
+// ============================================================
+
+document.addEventListener(
+    'DOMContentLoaded',
+    function () {
+        initSettings();
+        bindActionButtons();
+        loadUsernameFromUrl();
+    }
+);
+
