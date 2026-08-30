@@ -93,15 +93,26 @@ function animate3D() {
     renderer.render(scene, camera);
 }
 
+// Automatically tries multiple public proxies sequentially until one succeeds
 async function fetchJsonSafe(url) {
-    try {
-        const proxyUrl = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`;
-        const res = await fetch(proxyUrl);
-        if (!res.ok) return null;
-        return await res.json();
-    } catch {
-        return null;
+    const proxies = [
+        `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
+        `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+        `https://corsproxy.io/?${encodeURIComponent(url)}`
+    ];
+
+    for (const proxyUrl of proxies) {
+        try {
+            const res = await fetch(proxyUrl);
+            if (res.ok) {
+                const text = await res.text();
+                return JSON.parse(text);
+            }
+        } catch (e) {
+            continue; // Try next proxy in line
+        }
     }
+    return null; // All proxies blocked this request
 }
 
 async function performSearch() {
@@ -113,7 +124,6 @@ async function performSearch() {
     profileContainer.classList.add('hidden');
 
     try {
-        // Search user profile via proxy
         const searchData = await fetchJsonSafe(`https://users.roblox.com/v1/users/search?keyword=${encodeURIComponent(username)}&limit=10`);
 
         if (!searchData || !searchData.data || searchData.data.length === 0) {
@@ -125,7 +135,6 @@ async function performSearch() {
         const displayName = matchedUser.displayName;
         const name = matchedUser.name;
 
-        // Fetch sub-telemetry points independently so partial failures don't crash the UI
         const [
             profile, avatar, followers, friends,
             usernameHistory, avatarRig, groups, games
