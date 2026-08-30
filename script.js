@@ -1,95 +1,37 @@
-// ============================================================
-// ROBLOX PROFILE LOOKUP
-// GitHub Pages + Cloudflare Worker
-// ============================================================
+const WORKER_URL = "https://roblox-proxy.kaydenburke.workers.dev";
 
-const CLOUDFLARE_WORKER =
-    'https://roblox-proxy.kaydenburke.workers.dev';
+const usernameInput = document.getElementById("usernameInput");
+const searchBtn = document.getElementById("searchBtn");
+const loader = document.getElementById("loader");
+const errorContainer = document.getElementById("errorContainer");
+const profileContainer = document.getElementById("profileContainer");
 
-
-// ============================================================
-// DOM ELEMENTS
-// ============================================================
-
-const usernameInput =
-    document.getElementById('usernameInput');
-
-const searchBtn =
-    document.getElementById('searchBtn');
-
-const loader =
-    document.getElementById('loader');
-
-const errorContainer =
-    document.getElementById('errorContainer');
-
-const profileContainer =
-    document.getElementById('profileContainer');
+let requestNumber = 0;
 
 
-// ============================================================
-// STATE
-// ============================================================
+// ------------------------------------------------------------
+// HELPERS
+// ------------------------------------------------------------
 
-let scene = null;
-let camera = null;
-let renderer = null;
-let avatarMesh = null;
+function setText(id, value) {
+    const element = document.getElementById(id);
 
-let isDragging = false;
-
-let previousMousePosition = {
-    x: 0,
-    y: 0
-};
-
-let targetRotationVelocity = 0.003;
-let currentRotationVelocity = 0.003;
-
-let currentRequestId = 0;
-
-
-// ============================================================
-// EVENT LISTENERS
-// ============================================================
-
-if (searchBtn) {
-    searchBtn.addEventListener(
-        'click',
-        performSearch
-    );
+    if (element) {
+        element.textContent =
+            value === null || value === undefined
+                ? "N/A"
+                : value;
+    }
 }
 
-if (usernameInput) {
-    usernameInput.addEventListener(
-        'keypress',
-        function (event) {
-            if (event.key === 'Enter') {
-                performSearch();
-            }
-        }
-    );
-}
-
-
-// ============================================================
-// UTILITY FUNCTIONS
-// ============================================================
 
 function escapeHtml(value) {
-    if (
-        value === null ||
-        value === undefined
-    ) {
-        return '';
-    }
-
-    return String(value)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
+    return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
 }
 
 
@@ -97,7 +39,7 @@ function formatNumber(value) {
     const number = Number(value);
 
     if (!Number.isFinite(number)) {
-        return 'N/A';
+        return "N/A";
     }
 
     return number.toLocaleString();
@@ -106,1250 +48,571 @@ function formatNumber(value) {
 
 function formatDate(value) {
     if (!value) {
-        return 'N/A';
+        return "N/A";
     }
 
     const date = new Date(value);
 
     if (Number.isNaN(date.getTime())) {
-        return 'N/A';
+        return "N/A";
     }
 
-    return date.toLocaleDateString(
-        undefined,
-        {
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric'
-        }
-    );
+    return date.toLocaleDateString(undefined, {
+        year: "numeric",
+        month: "short",
+        day: "numeric"
+    });
 }
 
 
-function setText(id, value) {
-    const element =
-        document.getElementById(id);
+function setLoading(isLoading) {
+    if (loader) {
+        loader.classList.toggle("hidden", !isLoading);
+    }
 
-    if (element) {
-        element.textContent =
-            value ?? 'N/A';
+    if (searchBtn) {
+        searchBtn.disabled = isLoading;
     }
 }
 
 
-function showLoading(show) {
-    if (!loader) {
-        return;
-    }
-
-    loader.classList.toggle(
-        'hidden',
-        !show
-    );
-}
-
-
-function showProfile(show) {
-    if (!profileContainer) {
-        return;
-    }
-
-    profileContainer.classList.toggle(
-        'hidden',
-        !show
-    );
-}
-
-
-function clearError() {
+function hideError() {
     if (!errorContainer) {
         return;
     }
 
-    errorContainer.innerHTML = '';
-
-    errorContainer.classList.add(
-        'hidden'
-    );
+    errorContainer.textContent = "";
+    errorContainer.classList.add("hidden");
 }
 
 
-function showError(
-    message,
-    showRetry = true
-) {
+function showError(message) {
     if (!errorContainer) {
         return;
     }
 
-    const retryButton =
-        showRetry
-            ? `
-                <button
-                    id="retryBtn"
-                    type="button"
-                    style="
-                        margin-left: 10px;
-                        background: #6366f1;
-                        border: none;
-                        color: #fff;
-                        padding: 6px 12px;
-                        border-radius: 6px;
-                        cursor: pointer;
-                        font-weight: 700;
-                    "
-                >
-                    RETRY
-                </button>
-            `
-            : '';
-
-    errorContainer.innerHTML = `
-        <span>
-            ⚠️ ${escapeHtml(message)}
-        </span>
-        ${retryButton}
-    `;
-
-    errorContainer.classList.remove(
-        'hidden'
-    );
-
-    const retryBtn =
-        document.getElementById(
-            'retryBtn'
-        );
-
-    if (retryBtn) {
-        retryBtn.addEventListener(
-            'click',
-            performSearch
-        );
-    }
+    errorContainer.textContent = message;
+    errorContainer.classList.remove("hidden");
 }
 
 
-// ============================================================
-// CLOUDFLARE / ROBLOX API FETCHER
-// ============================================================
+// ------------------------------------------------------------
+// ROBLOX REQUEST THROUGH WORKER
+// ------------------------------------------------------------
 
-async function fetchJson(
-    url,
-    options = {},
-    timeout = 15000
-) {
-    const controller =
-        new AbortController();
+async function robloxRequest(endpoint, options = {}) {
 
-    const timeoutId =
-        setTimeout(
-            function () {
-                controller.abort();
-            },
-            timeout
+    const url =
+        WORKER_URL +
+        "?url=" +
+        encodeURIComponent(endpoint);
+
+    const response = await fetch(url, {
+        method: options.method || "GET",
+        headers: {
+            "Accept": "application/json",
+            ...(options.headers || {})
+        },
+        body: options.body
+    });
+
+    if (!response.ok) {
+        throw new Error(
+            "Worker returned HTTP " + response.status
         );
+    }
+
+    const text = await response.text();
+
+    if (!text) {
+        throw new Error("The Worker returned an empty response.");
+    }
 
     try {
-        const proxyUrl =
-            CLOUDFLARE_WORKER +
-            '/?url=' +
-            encodeURIComponent(url);
+        return JSON.parse(text);
+    } catch {
+        console.error("Worker response:", text);
 
-        const fetchOptions = {
-            method:
-                options.method || 'GET',
+        throw new Error(
+            "The Worker did not return valid JSON."
+        );
+    }
+}
 
-            signal:
-                controller.signal,
 
-            headers: {
-                Accept:
-                    'application/json',
+// ------------------------------------------------------------
+// FIND USER
+// ------------------------------------------------------------
 
-                ...(options.headers || {})
+async function findUser(username) {
+
+    const endpoint =
+        "https://users.roblox.com/v1/users/search" +
+        "?keyword=" +
+        encodeURIComponent(username) +
+        "&limit=10";
+
+    const data = await robloxRequest(endpoint);
+
+    if (!data || !Array.isArray(data.data)) {
+        throw new Error("Invalid Roblox search response.");
+    }
+
+    const exact = data.data.find(user =>
+        user.name &&
+        user.name.toLowerCase() === username.toLowerCase()
+    );
+
+    return exact || data.data[0] || null;
+}
+
+
+// ------------------------------------------------------------
+// LOAD PROFILE
+// ------------------------------------------------------------
+
+async function loadProfile(userId) {
+
+    const profile = await robloxRequest(
+        "https://users.roblox.com/v1/users/" + userId
+    );
+
+    const avatar = await robloxRequest(
+        "https://thumbnails.roblox.com/v1/users/avatar-headshot" +
+        "?userIds=" + userId +
+        "&size=420x420" +
+        "&format=Png" +
+        "&isCircular=false"
+    );
+
+    let followers = null;
+    let friends = null;
+    let history = null;
+    let avatarData = null;
+    let groups = null;
+    let games = null;
+    let presence = null;
+
+    try {
+        followers = await robloxRequest(
+            "https://friends.roblox.com/v1/users/" +
+            userId +
+            "/followers/count"
+        );
+    } catch (error) {
+        console.warn("Followers unavailable:", error);
+    }
+
+    try {
+        friends = await robloxRequest(
+            "https://friends.roblox.com/v1/users/" +
+            userId +
+            "/friends/count"
+        );
+    } catch (error) {
+        console.warn("Friends unavailable:", error);
+    }
+
+    try {
+        history = await robloxRequest(
+            "https://users.roblox.com/v1/users/" +
+            userId +
+            "/username-history"
+        );
+    } catch (error) {
+        console.warn("Username history unavailable:", error);
+    }
+
+    try {
+        avatarData = await robloxRequest(
+            "https://avatar.roblox.com/v2/avatar/users/" +
+            userId +
+            "/avatar"
+        );
+    } catch (error) {
+        console.warn("Avatar data unavailable:", error);
+    }
+
+    try {
+        groups = await robloxRequest(
+            "https://groups.roblox.com/v1/users/" +
+            userId +
+            "/groups/roles"
+        );
+    } catch (error) {
+        console.warn("Groups unavailable:", error);
+    }
+
+    try {
+        games = await robloxRequest(
+            "https://games.roblox.com/v1/users/" +
+            userId +
+            "/games?limit=6"
+        );
+    } catch (error) {
+        console.warn("Games unavailable:", error);
+    }
+
+    try {
+        presence = await robloxRequest(
+            "https://presence.roblox.com/v1/presence/users",
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    userIds: [Number(userId)]
+                })
             }
-        };
-
-        if (
-            options.body !== undefined
-        ) {
-            fetchOptions.body =
-                options.body;
-        }
-
-        const response =
-            await fetch(
-                proxyUrl,
-                fetchOptions
-            );
-
-        if (!response.ok) {
-            throw new Error(
-                'HTTP ' +
-                response.status
-            );
-        }
-
-        return await response.json();
-
+        );
     } catch (error) {
-
-        if (
-            error &&
-            error.name === 'AbortError'
-        ) {
-            throw new Error(
-                'The Roblox request timed out. Please try again.'
-            );
-        }
-
-        throw error;
-
-    } finally {
-        clearTimeout(timeoutId);
+        console.warn("Presence unavailable:", error);
     }
+
+    return {
+        profile,
+        avatar,
+        followers,
+        friends,
+        history,
+        avatarData,
+        groups,
+        games,
+        presence
+    };
 }
 
 
-// ============================================================
-// SAFE OPTIONAL API FETCH
-// ============================================================
+// ------------------------------------------------------------
+// UPDATE PROFILE
+// ------------------------------------------------------------
 
-async function optionalFetch(
-    url,
-    options = {}
-) {
-    try {
-        return await fetchJson(
-            url,
-            options
+function updateProfile(user, data) {
+
+    const profile = data.profile;
+
+    setText(
+        "displayName",
+        profile?.displayName || user.name
+    );
+
+    setText(
+        "userName",
+        "@" + (profile?.name || user.name)
+    );
+
+    const verified =
+        document.getElementById("verifiedBadge");
+
+    if (verified) {
+        verified.classList.toggle(
+            "hidden",
+            !profile?.hasVerifiedBadge
         );
-    } catch (error) {
-
-        console.warn(
-            'Optional Roblox API request failed:',
-            url,
-            error
-        );
-
-        return null;
     }
+
+    setText(
+        "createdDate",
+        formatDate(profile?.created)
+    );
+
+    setText(
+        "followersCount",
+        data.followers?.count !== undefined
+            ? formatNumber(data.followers.count)
+            : "N/A"
+    );
+
+    setText(
+        "friendsCount",
+        data.friends?.count !== undefined
+            ? formatNumber(data.friends.count)
+            : "N/A"
+    );
+
+    setText(
+        "rigType",
+        data.avatarData?.playerAvatarType || "N/A"
+    );
+
+    updateAvatar(data.avatar);
+    updatePresence(data.presence);
+    updateHistory(data.history);
+    updateGroups(data.groups);
+    updateGames(data.games);
 }
 
 
-// ============================================================
-// 3D AVATAR VIEWER
-// ============================================================
+// ------------------------------------------------------------
+// AVATAR
+// ------------------------------------------------------------
 
-function init3DViewer(imageUrl) {
+function updateAvatar(avatar) {
 
     const container =
-        document.getElementById(
-            'canvasContainer'
-        );
+        document.getElementById("canvasContainer");
 
     if (!container) {
         return;
     }
 
-    container.innerHTML = '';
+    const imageUrl =
+        avatar?.data?.[0]?.imageUrl;
 
-    if (!window.THREE) {
+    if (!imageUrl) {
+        container.innerHTML =
+            "<span>Avatar unavailable</span>";
+        return;
+    }
 
-        console.warn(
-            'Three.js is not loaded.'
-        );
+    container.innerHTML = `
+        <img
+            src="${escapeHtml(imageUrl)}"
+            alt="Roblox avatar"
+            style="
+                width:100%;
+                height:100%;
+                object-fit:contain;
+                display:block;
+            "
+        >
+    `;
+}
+
+
+// ------------------------------------------------------------
+// PRESENCE
+// ------------------------------------------------------------
+
+function updatePresence(data) {
+
+    const status =
+        document.getElementById("onlineStatus");
+
+    const location =
+        document.getElementById("lastOnline");
+
+    if (!status) {
+        return;
+    }
+
+    const presence =
+        data?.userPresences?.[0];
+
+    if (!presence) {
+        status.textContent = "UNKNOWN";
+        status.className = "status-pill";
+
+        if (location) {
+            location.textContent = "Unavailable";
+        }
 
         return;
     }
 
-    scene =
-        new THREE.Scene();
+    const type =
+        Number(presence.userPresenceType);
 
-    camera =
-        new THREE.PerspectiveCamera(
-            45,
-            1,
-            0.1,
-            1000
-        );
+    let text = "OFFLINE";
 
-    camera.position.z = 2.7;
+    if (type === 1) {
+        text = "ONLINE";
+    }
 
-    renderer =
-        new THREE.WebGLRenderer({
-            antialias: true,
-            alpha: true
-        });
+    if (type === 2) {
+        text = "IN GAME";
+    }
 
-    renderer.setSize(
-        115,
-        115
-    );
+    if (type === 3) {
+        text = "IN STUDIO";
+    }
 
-    renderer.setPixelRatio(
-        Math.min(
-            window.devicePixelRatio || 1,
-            2
-        )
-    );
+    status.textContent = text;
 
-    container.appendChild(
-        renderer.domElement
-    );
+    status.className =
+        type === 0
+            ? "status-pill"
+            : "status-pill online";
 
-    const geometry =
-        new THREE.PlaneGeometry(
-            2.1,
-            2.1,
-            32,
-            32
-        );
-
-    avatarMesh = null;
-
-    const textureLoader =
-        new THREE.TextureLoader();
-
-    textureLoader.crossOrigin =
-        'anonymous';
-
-    textureLoader.load(
-
-        imageUrl,
-
-        function (texture) {
-
-            const material =
-                new THREE.MeshBasicMaterial({
-                    map: texture,
-                    transparent: true,
-                    side: THREE.DoubleSide
-                });
-
-            avatarMesh =
-                new THREE.Mesh(
-                    geometry,
-                    material
-                );
-
-            scene.add(
-                avatarMesh
-            );
-
-            currentRotationVelocity =
-                targetRotationVelocity;
-
-            animate3D();
-        },
-
-        undefined,
-
-        function () {
-
-            console.warn(
-                'Could not load Roblox avatar image.'
-            );
-
-            const material =
-                new THREE.MeshBasicMaterial({
-                    color: 0x6366f1
-                });
-
-            avatarMesh =
-                new THREE.Mesh(
-                    geometry,
-                    material
-                );
-
-            scene.add(
-                avatarMesh
-            );
-
-            animate3D();
-        }
-    );
-
-
-    container.addEventListener(
-        'mousedown',
-        function (event) {
-
-            isDragging = true;
-
-            previousMousePosition = {
-                x: event.clientX,
-                y: event.clientY
-            };
-        }
-    );
-
-
-    container.addEventListener(
-        'touchstart',
-        function (event) {
-
-            if (!event.touches.length) {
-                return;
-            }
-
-            isDragging = true;
-
-            previousMousePosition = {
-                x: event.touches[0].clientX,
-                y: event.touches[0].clientY
-            };
-        },
-        {
-            passive: true
-        }
-    );
+    if (location) {
+        location.textContent =
+            presence.lastLocation ||
+            (type === 0 ? "Currently offline" : "Active");
+    }
 }
 
 
-// ============================================================
-// GLOBAL MOUSE MOVEMENT
-// ============================================================
+// ------------------------------------------------------------
+// USERNAME HISTORY
+// ------------------------------------------------------------
 
-window.addEventListener(
-    'mousemove',
-    function (event) {
+function updateHistory(data) {
 
-        if (
-            !isDragging ||
-            !avatarMesh
-        ) {
-            return;
-        }
+    const container =
+        document.getElementById("pastUsernames");
 
-        const deltaX =
-            event.clientX -
-            previousMousePosition.x;
-
-        const deltaY =
-            event.clientY -
-            previousMousePosition.y;
-
-        avatarMesh.rotation.y +=
-            deltaX * 0.01;
-
-        avatarMesh.rotation.x +=
-            deltaY * 0.01;
-
-        currentRotationVelocity =
-            deltaX * 0.0005;
-
-        previousMousePosition = {
-            x: event.clientX,
-            y: event.clientY
-        };
-    }
-);
-
-
-window.addEventListener(
-    'mouseup',
-    function () {
-        isDragging = false;
-    }
-);
-
-
-// ============================================================
-// GLOBAL TOUCH MOVEMENT
-// ============================================================
-
-window.addEventListener(
-    'touchmove',
-    function (event) {
-
-        if (
-            !isDragging ||
-            !avatarMesh
-        ) {
-            return;
-        }
-
-        if (!event.touches.length) {
-            return;
-        }
-
-        const deltaX =
-            event.touches[0].clientX -
-            previousMousePosition.x;
-
-        const deltaY =
-            event.touches[0].clientY -
-            previousMousePosition.y;
-
-        avatarMesh.rotation.y +=
-            deltaX * 0.01;
-
-        avatarMesh.rotation.x +=
-            deltaY * 0.01;
-
-        currentRotationVelocity =
-            deltaX * 0.0005;
-
-        previousMousePosition = {
-            x: event.touches[0].clientX,
-            y: event.touches[0].clientY
-        };
-    },
-    {
-        passive: true
-    }
-);
-
-
-window.addEventListener(
-    'touchend',
-    function () {
-        isDragging = false;
-    }
-);
-
-
-// ============================================================
-// 3D ANIMATION
-// ============================================================
-
-function animate3D() {
-
-    if (
-        !renderer ||
-        !scene ||
-        !camera
-    ) {
+    if (!container) {
         return;
     }
-
-    requestAnimationFrame(
-        animate3D
-    );
-
-    if (
-        avatarMesh &&
-        !isDragging
-    ) {
-
-        currentRotationVelocity +=
-            (
-                targetRotationVelocity -
-                currentRotationVelocity
-            ) * 0.05;
-
-        avatarMesh.rotation.y +=
-            currentRotationVelocity;
-
-        avatarMesh.rotation.x *=
-            0.95;
-    }
-
-    renderer.render(
-        scene,
-        camera
-    );
-}
-
-
-// ============================================================
-// FIND ROBLOX USER
-// ============================================================
-
-async function findRobloxUser(
-    username
-) {
-
-    const url =
-        'https://users.roblox.com/v1/users/search' +
-        '?keyword=' +
-        encodeURIComponent(username) +
-        '&limit=10';
-
-    const data =
-        await fetchJson(url);
 
     if (
         !data ||
         !Array.isArray(data.data) ||
         data.data.length === 0
     ) {
-        return null;
-    }
-
-    const exactMatch =
-        data.data.find(
-            function (user) {
-
-                return (
-                    user.name &&
-                    user.name.toLowerCase() ===
-                    username.toLowerCase()
-                );
-            }
-        );
-
-    if (exactMatch) {
-        return exactMatch;
-    }
-
-    return data.data[0];
-}
-
-
-// ============================================================
-// FETCH PROFILE DATA
-// ============================================================
-
-async function fetchProfileData(
-    userId
-) {
-
-    const urls = {
-
-        profile:
-            'https://users.roblox.com/v1/users/' +
-            userId,
-
-        avatar:
-            'https://thumbnails.roblox.com/v1/users/avatar-headshot' +
-            '?userIds=' +
-            userId +
-            '&size=420x420' +
-            '&format=Png' +
-            '&isCircular=false',
-
-        followers:
-            'https://friends.roblox.com/v1/users/' +
-            userId +
-            '/followers/count',
-
-        friends:
-            'https://friends.roblox.com/v1/users/' +
-            userId +
-            '/friends/count',
-
-        usernameHistory:
-            'https://users.roblox.com/v1/users/' +
-            userId +
-            '/username-history',
-
-        avatarRig:
-            'https://avatar.roblox.com/v2/avatar/users/' +
-            userId +
-            '/avatar',
-
-        groups:
-            'https://groups.roblox.com/v1/users/' +
-            userId +
-            '/groups/roles',
-
-        games:
-            'https://games.roblox.com/v1/users/' +
-            userId +
-            '/games?limit=6',
-
-        presence:
-            'https://presence.roblox.com/v1/presence/users'
-    };
-
-
-    const results =
-        await Promise.allSettled([
-
-            optionalFetch(
-                urls.profile
-            ),
-
-            optionalFetch(
-                urls.avatar
-            ),
-
-            optionalFetch(
-                urls.followers
-            ),
-
-            optionalFetch(
-                urls.friends
-            ),
-
-            optionalFetch(
-                urls.usernameHistory
-            ),
-
-            optionalFetch(
-                urls.avatarRig
-            ),
-
-            optionalFetch(
-                urls.groups
-            ),
-
-            optionalFetch(
-                urls.games
-            ),
-
-            optionalFetch(
-                urls.presence,
-                {
-                    method: 'POST',
-
-                    headers: {
-                        'Content-Type':
-                            'application/json'
-                    },
-
-                    body:
-                        JSON.stringify({
-                            userIds: [
-                                Number(userId)
-                            ]
-                        })
-                }
-            )
-        ]);
-
-
-    function getResult(index) {
-
-        const result =
-            results[index];
-
-        if (
-            result &&
-            result.status === 'fulfilled'
-        ) {
-            return result.value;
-        }
-
-        return null;
-    }
-
-
-    return {
-
-        profile:
-            getResult(0),
-
-        avatar:
-            getResult(1),
-
-        followers:
-            getResult(2),
-
-        friends:
-            getResult(3),
-
-        usernameHistory:
-            getResult(4),
-
-        avatarRig:
-            getResult(5),
-
-        groups:
-            getResult(6),
-
-        games:
-            getResult(7),
-
-        presence:
-            getResult(8)
-    };
-}
-
-
-// ============================================================
-// UPDATE IDENTITY
-// ============================================================
-
-function updateIdentity(
-    user,
-    profile
-) {
-
-    const displayName =
-        profile?.displayName ||
-        user?.displayName ||
-        user?.name ||
-        'Unknown';
-
-    const username =
-        profile?.name ||
-        user?.name ||
-        'Unknown';
-
-    setText(
-        'displayName',
-        displayName
-    );
-
-    setText(
-        'userName',
-        '@' + username
-    );
-
-    const badgeEl =
-        document.getElementById(
-            'verifiedBadge'
-        );
-
-    if (badgeEl) {
-
-        badgeEl.classList.toggle(
-            'hidden',
-            !profile?.hasVerifiedBadge
-        );
-    }
-}
-
-
-// ============================================================
-// UPDATE AVATAR
-// ============================================================
-
-function updateAvatar(
-    avatar
-) {
-
-    let avatarUrl =
-        'https://tr.rbxcdn.com/30day-avatar/420/420/AvatarHeadshot/Png';
-
-    if (
-        avatar &&
-        Array.isArray(avatar.data) &&
-        avatar.data.length > 0 &&
-        avatar.data[0].imageUrl
-    ) {
-
-        avatarUrl =
-            avatar.data[0].imageUrl;
-    }
-
-    init3DViewer(
-        avatarUrl
-    );
-}
-
-
-// ============================================================
-// UPDATE STATS
-// ============================================================
-
-function updateStats(
-    data
-) {
-
-    setText(
-        'createdDate',
-        formatDate(
-            data.profile?.created
-        )
-    );
-
-    setText(
-        'followersCount',
-
-        data.followers?.count !== undefined
-            ? formatNumber(
-                data.followers.count
-            )
-            : 'N/A'
-    );
-
-    setText(
-        'friendsCount',
-
-        data.friends?.count !== undefined
-            ? formatNumber(
-                data.friends.count
-            )
-            : 'N/A'
-    );
-
-    setText(
-        'rigType',
-
-        data.avatarRig?.playerAvatarType ||
-        'N/A'
-    );
-}
-
-
-// ============================================================
-// UPDATE PRESENCE
-// ============================================================
-
-function updatePresence(
-    presenceData
-) {
-
-    const statusElement =
-        document.getElementById(
-            'onlineStatus'
-        );
-
-    const lastOnlineElement =
-        document.getElementById(
-            'lastOnline'
-        );
-
-    if (!statusElement) {
-        return;
-    }
-
-    let presence = null;
-
-    if (
-        presenceData &&
-        Array.isArray(
-            presenceData.userPresences
-        ) &&
-        presenceData.userPresences.length > 0
-    ) {
-
-        presence =
-            presenceData.userPresences[0];
-    }
-
-    if (!presence) {
-
-        statusElement.textContent =
-            'UNKNOWN';
-
-        statusElement.className =
-            'status-pill';
-
-        if (lastOnlineElement) {
-
-            lastOnlineElement.textContent =
-                'Status unavailable';
-        }
-
-        return;
-    }
-
-
-    const presenceType =
-        Number(
-            presence.userPresenceType
-        );
-
-
-    let statusText =
-        'OFFLINE';
-
-
-    if (presenceType === 1) {
-
-        statusText =
-            'ONLINE';
-
-    } else if (presenceType === 2) {
-
-        statusText =
-            'IN GAME';
-
-    } else if (presenceType === 3) {
-
-        statusText =
-            'IN STUDIO';
-    }
-
-
-    statusElement.textContent =
-        statusText;
-
-
-    statusElement.className =
-        presenceType === 0
-            ? 'status-pill'
-            : 'status-pill online';
-
-
-    if (lastOnlineElement) {
-
-        if (presence.lastLocation) {
-
-            lastOnlineElement.textContent =
-                presence.lastLocation;
-
-        } else {
-
-            lastOnlineElement.textContent =
-                statusText === 'OFFLINE'
-                    ? 'Currently offline'
-                    : 'Active';
-        }
-    }
-}
-
-
-// ============================================================
-// UPDATE USERNAME HISTORY
-// ============================================================
-
-function updateUsernameHistory(
-    history
-) {
-
-    const container =
-        document.getElementById(
-            'pastUsernames'
-        );
-
-    if (!container) {
-        return;
-    }
-
-    if (
-        history &&
-        Array.isArray(history.data) &&
-        history.data.length > 0
-    ) {
-
-        container.innerHTML =
-            history.data
-                .map(
-                    function (item) {
-
-                        return `
-                            <span class="tag">
-                                ${escapeHtml(item.name)}
-                            </span>
-                        `;
-                    }
-                )
-                .join('');
-
-    } else {
-
         container.innerHTML =
             '<span class="empty-hint">No past aliases</span>';
+
+        return;
     }
+
+    container.innerHTML =
+        data.data.map(item => `
+            <span class="tag">
+                ${escapeHtml(item.name)}
+            </span>
+        `).join("");
 }
 
 
-// ============================================================
-// UPDATE GROUPS
-// ============================================================
+// ------------------------------------------------------------
+// GROUPS
+// ------------------------------------------------------------
 
-function updateGroups(
-    groups
-) {
+function updateGroups(data) {
 
     const container =
-        document.getElementById(
-            'groupsList'
-        );
+        document.getElementById("groupsList");
 
     if (!container) {
         return;
     }
 
     if (
-        groups &&
-        Array.isArray(groups.data) &&
-        groups.data.length > 0
+        !data ||
+        !Array.isArray(data.data) ||
+        data.data.length === 0
     ) {
-
-        container.innerHTML =
-            groups.data
-                .slice(0, 4)
-                .map(
-                    function (groupData) {
-
-                        const groupName =
-                            groupData?.group?.name ||
-                            'Unknown group';
-
-                        const roleName =
-                            groupData?.role?.name ||
-                            'Unknown role';
-
-                        return `
-                            <span
-                                class="tag"
-                                title="${escapeHtml(roleName)}"
-                            >
-                                ${escapeHtml(groupName)}
-                            </span>
-                        `;
-                    }
-                )
-                .join('');
-
-    } else {
-
         container.innerHTML =
             '<span class="empty-hint">No public organizations</span>';
+
+        return;
     }
+
+    container.innerHTML =
+        data.data.slice(0, 4).map(item => {
+
+            const name =
+                item?.group?.name || "Unknown group";
+
+            const role =
+                item?.role?.name || "Unknown role";
+
+            return `
+                <span
+                    class="tag"
+                    title="${escapeHtml(role)}"
+                >
+                    ${escapeHtml(name)}
+                </span>
+            `;
+        }).join("");
 }
 
 
-// ============================================================
-// UPDATE EXPERIENCES
-// ============================================================
+// ------------------------------------------------------------
+// GAMES
+// ------------------------------------------------------------
 
-function updateGames(
-    games
-) {
+function updateGames(data) {
 
     const container =
-        document.getElementById(
-            'gamesContainer'
-        );
+        document.getElementById("gamesContainer");
 
-    const visitsElement =
-        document.getElementById(
-            'placeVisits'
-        );
+    const visits =
+        document.getElementById("placeVisits");
 
     if (!container) {
         return;
     }
 
     if (
-        !games ||
-        !Array.isArray(games.data) ||
-        games.data.length === 0
+        !data ||
+        !Array.isArray(data.data) ||
+        data.data.length === 0
     ) {
-
         container.innerHTML =
             '<span class="empty-hint">No public experiences found</span>';
 
-        if (visitsElement) {
-            visitsElement.textContent =
-                'N/A';
+        if (visits) {
+            visits.textContent = "N/A";
         }
 
         return;
     }
 
-
-    let totalVisits = 0;
-
+    let total = 0;
 
     container.innerHTML =
-        games.data
-            .map(
-                function (game) {
+        data.data.map(game => {
 
-                    const gameName =
-                        game?.name ||
-                        'Unnamed experience';
+            const name =
+                game?.name || "Unnamed experience";
 
-                    const visits =
-                        Number(
-                            game?.placeVisits
-                        ) || 0;
+            const count =
+                Number(game?.placeVisits) || 0;
 
-                    totalVisits +=
-                        visits;
+            total += count;
 
-                    return `
-                        <div class="exp-card">
-                            <h4>
-                                ${escapeHtml(gameName)}
-                            </h4>
+            return `
+                <div class="exp-card">
+                    <h4>${escapeHtml(name)}</h4>
+                    <p>Visits: ${formatNumber(count)}</p>
+                </div>
+            `;
+        }).join("");
 
-                            <p>
-                                Visits:
-                                ${formatNumber(visits)}
-                            </p>
-                        </div>
-                    `;
-                }
-            )
-            .join('');
-
-
-    if (visitsElement) {
-
-        visitsElement.textContent =
-            formatNumber(
-                totalVisits
-            );
+    if (visits) {
+        visits.textContent =
+            formatNumber(total);
     }
 }
 
 
-// ============================================================
-// MAIN SEARCH
-// ============================================================
+// ------------------------------------------------------------
+// SEARCH
+// ------------------------------------------------------------
 
 async function performSearch() {
 
     const username =
         usernameInput?.value?.trim();
 
-
     if (!username) {
-
-        showError(
-            'Please enter a Roblox username.',
-            false
-        );
-
+        showError("Enter a Roblox username first.");
         return;
     }
 
+    const id = ++requestNumber;
 
-    const requestId =
-        ++currentRequestId;
+    hideError();
+    setLoading(true);
 
-
-    showLoading(true);
-
-    clearError();
-
-    showProfile(false);
-
-
-    if (searchBtn) {
-        searchBtn.disabled = true;
+    if (profileContainer) {
+        profileContainer.classList.add("hidden");
     }
-
 
     try {
 
-        // ----------------------------------------------------
-        // STEP 1 - FIND USER
-        // ----------------------------------------------------
+        const user =
+            await findUser(username);
 
-        let user;
-
-
-        try {
-
-            user =
-                await findRobloxUser(
-                    username
-                );
-
-        } catch (error) {
-
-            console.error(
-                'Roblox user search failed:',
-                error
-            );
-
-            throw new Error(
-                'Roblox search is temporarily unavailable. Please try again in a moment.'
-            );
-        }
-
-
-        if (
-            requestId !==
-            currentRequestId
-        ) {
+        if (id !== requestNumber) {
             return;
         }
 
-
         if (!user) {
-
             throw new Error(
                 'No Roblox user named "' +
                 username +
@@ -1357,181 +620,74 @@ async function performSearch() {
             );
         }
 
-
-        const userId =
-            user.id;
-
-
-        // ----------------------------------------------------
-        // STEP 2 - FETCH PROFILE
-        // ----------------------------------------------------
-
         const data =
-            await fetchProfileData(
-                userId
-            );
+            await loadProfile(user.id);
 
-
-        if (
-            requestId !==
-            currentRequestId
-        ) {
+        if (id !== requestNumber) {
             return;
         }
 
+        updateProfile(user, data);
 
-        // ----------------------------------------------------
-        // STEP 3 - UPDATE UI
-        // ----------------------------------------------------
-
-        updateIdentity(
-            user,
-            data.profile
-        );
-
-        updateAvatar(
-            data.avatar
-        );
-
-        updateStats(
-            data
-        );
-
-        updatePresence(
-            data.presence
-        );
-
-        updateUsernameHistory(
-            data.usernameHistory
-        );
-
-        updateGroups(
-            data.groups
-        );
-
-        updateGames(
-            data.games
-        );
-
-
-        // ----------------------------------------------------
-        // STEP 4 - SHOW PROFILE
-        // ----------------------------------------------------
-
-        showProfile(true);
-
-
-        const successfulRequests = [
-
-            data.profile,
-            data.avatar,
-            data.followers,
-            data.friends,
-            data.usernameHistory,
-            data.avatarRig,
-            data.groups,
-            data.games,
-            data.presence
-
-        ].filter(
-            Boolean
-        ).length;
-
-
-        if (
-            successfulRequests < 3
-        ) {
-
-            showError(
-                'The Roblox profile was found, but some profile information could not be loaded.',
-                true
-            );
+        if (profileContainer) {
+            profileContainer.classList.remove("hidden");
         }
-
 
     } catch (error) {
 
-        console.error(
-            'Profile search error:',
-            error
-        );
+        console.error(error);
 
-
-        if (
-            requestId !==
-            currentRequestId
-        ) {
-            return;
+        if (id === requestNumber) {
+            showError(
+                error.message ||
+                "Something went wrong."
+            );
         }
-
-
-        showProfile(true);
-
-
-        showError(
-            error?.message ||
-            'Something went wrong while searching Roblox.',
-            true
-        );
-
 
     } finally {
 
-        if (
-            requestId ===
-            currentRequestId
-        ) {
+        if (id === requestNumber) {
+            setLoading(false);
+        }
+    }
+}
 
-            showLoading(false);
 
+// ------------------------------------------------------------
+// EVENTS
+// ------------------------------------------------------------
 
-            if (searchBtn) {
-                searchBtn.disabled =
-                    false;
+if (searchBtn) {
+    searchBtn.addEventListener(
+        "click",
+        performSearch
+    );
+}
+
+if (usernameInput) {
+    usernameInput.addEventListener(
+        "keydown",
+        event => {
+            if (event.key === "Enter") {
+                performSearch();
             }
         }
-    }
+    );
 }
 
 
-// ============================================================
+// ------------------------------------------------------------
 // URL SEARCH
-// ============================================================
+// ------------------------------------------------------------
 
-function loadUsernameFromUrl() {
+const params =
+    new URLSearchParams(window.location.search);
 
-    try {
+const startingUsername =
+    params.get("user");
 
-        const params =
-            new URLSearchParams(
-                window.location.search
-            );
-
-
-        const username =
-            params.get('user');
-
-
-        if (
-            username &&
-            usernameInput
-        ) {
-
-            usernameInput.value =
-                username;
-
-            performSearch();
-        }
-
-    } catch (error) {
-
-        console.warn(
-            'Could not read URL parameters:',
-            error
-        );
-    }
+if (startingUsername && usernameInput) {
+    usernameInput.value = startingUsername;
+    performSearch();
 }
 
-
-loadUsernameFromUrl();
-```
