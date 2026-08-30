@@ -3,28 +3,33 @@
 // GitHub Pages + Cloudflare Worker
 // ============================================================
 
-// ------------------------------------------------------------
-// CLOUDFLARE WORKER
-// ------------------------------------------------------------
-
 const CLOUDFLARE_WORKER =
     'https://roblox-proxy.kaydenburke.workers.dev';
 
 
-// ------------------------------------------------------------
+// ============================================================
 // DOM ELEMENTS
-// ------------------------------------------------------------
+// ============================================================
 
-const usernameInput = document.getElementById('usernameInput');
-const searchBtn = document.getElementById('searchBtn');
-const loader = document.getElementById('loader');
-const errorContainer = document.getElementById('errorContainer');
-const profileContainer = document.getElementById('profileContainer');
+const usernameInput =
+    document.getElementById('usernameInput');
+
+const searchBtn =
+    document.getElementById('searchBtn');
+
+const loader =
+    document.getElementById('loader');
+
+const errorContainer =
+    document.getElementById('errorContainer');
+
+const profileContainer =
+    document.getElementById('profileContainer');
 
 
-// ------------------------------------------------------------
+// ============================================================
 // STATE
-// ------------------------------------------------------------
+// ============================================================
 
 let scene = null;
 let camera = null;
@@ -32,7 +37,11 @@ let renderer = null;
 let avatarMesh = null;
 
 let isDragging = false;
-let previousMousePosition = { x: 0, y: 0 };
+
+let previousMousePosition = {
+    x: 0,
+    y: 0
+};
 
 let targetRotationVelocity = 0.003;
 let currentRotationVelocity = 0.003;
@@ -40,29 +49,38 @@ let currentRotationVelocity = 0.003;
 let currentRequestId = 0;
 
 
-// ------------------------------------------------------------
+// ============================================================
 // EVENT LISTENERS
-// ------------------------------------------------------------
+// ============================================================
 
 if (searchBtn) {
-    searchBtn.addEventListener('click', performSearch);
+    searchBtn.addEventListener(
+        'click',
+        performSearch
+    );
 }
 
 if (usernameInput) {
-    usernameInput.addEventListener('keypress', (event) => {
-        if (event.key === 'Enter') {
-            performSearch();
+    usernameInput.addEventListener(
+        'keypress',
+        function (event) {
+            if (event.key === 'Enter') {
+                performSearch();
+            }
         }
-    });
+    );
 }
 
 
-// ------------------------------------------------------------
+// ============================================================
 // UTILITY FUNCTIONS
-// ------------------------------------------------------------
+// ============================================================
 
 function escapeHtml(value) {
-    if (value === null || value === undefined) {
+    if (
+        value === null ||
+        value === undefined
+    ) {
         return '';
     }
 
@@ -97,78 +115,110 @@ function formatDate(value) {
         return 'N/A';
     }
 
-    return date.toLocaleDateString(undefined, {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric'
-    });
+    return date.toLocaleDateString(
+        undefined,
+        {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric'
+        }
+    );
 }
 
 
 function setText(id, value) {
-    const element = document.getElementById(id);
+    const element =
+        document.getElementById(id);
 
     if (element) {
-        element.textContent = value ?? 'N/A';
+        element.textContent =
+            value ?? 'N/A';
     }
 }
 
 
 function showLoading(show) {
-    if (!loader) return;
+    if (!loader) {
+        return;
+    }
 
-    loader.classList.toggle('hidden', !show);
+    loader.classList.toggle(
+        'hidden',
+        !show
+    );
 }
 
 
 function showProfile(show) {
-    if (!profileContainer) return;
+    if (!profileContainer) {
+        return;
+    }
 
-    profileContainer.classList.toggle('hidden', !show);
+    profileContainer.classList.toggle(
+        'hidden',
+        !show
+    );
 }
 
 
 function clearError() {
-    if (!errorContainer) return;
+    if (!errorContainer) {
+        return;
+    }
 
     errorContainer.innerHTML = '';
-    errorContainer.classList.add('hidden');
+
+    errorContainer.classList.add(
+        'hidden'
+    );
 }
 
 
-function showError(message, showRetry = true) {
-    if (!errorContainer) return;
+function showError(
+    message,
+    showRetry = true
+) {
+    if (!errorContainer) {
+        return;
+    }
 
-    const retryButton = showRetry
-        ? `
-            <button
-                id="retryBtn"
-                type="button"
-                style="
-                    margin-left: 10px;
-                    background: #6366f1;
-                    border: none;
-                    color: #fff;
-                    padding: 6px 12px;
-                    border-radius: 6px;
-                    cursor: pointer;
-                    font-weight: 700;
-                "
-            >
-                RETRY
-            </button>
-        `
-        : '';
+    const retryButton =
+        showRetry
+            ? `
+                <button
+                    id="retryBtn"
+                    type="button"
+                    style="
+                        margin-left: 10px;
+                        background: #6366f1;
+                        border: none;
+                        color: #fff;
+                        padding: 6px 12px;
+                        border-radius: 6px;
+                        cursor: pointer;
+                        font-weight: 700;
+                    "
+                >
+                    RETRY
+                </button>
+            `
+            : '';
 
     errorContainer.innerHTML = `
-        <span>⚠️ ${escapeHtml(message)}</span>
+        <span>
+            ⚠️ ${escapeHtml(message)}
+        </span>
         ${retryButton}
     `;
 
-    errorContainer.classList.remove('hidden');
+    errorContainer.classList.remove(
+        'hidden'
+    );
 
     const retryBtn =
-        document.getElementById('retryBtn');
+        document.getElementById(
+            'retryBtn'
+        );
 
     if (retryBtn) {
         retryBtn.addEventListener(
@@ -179,22 +229,9 @@ function showError(message, showRetry = true) {
 }
 
 
-// ------------------------------------------------------------
-// CLOUDFLARE + ROBLOX API FETCHER
-// ------------------------------------------------------------
-
-/*
-    All Roblox API requests are sent through the
-    Cloudflare Worker.
-
-    Browser:
-        GitHub Pages
-            ↓
-        Cloudflare Worker
-            ↓
-        Roblox API
-*/
-
+// ============================================================
+// CLOUDFLARE / ROBLOX API FETCHER
+// ============================================================
 
 async function fetchJson(
     url,
@@ -205,63 +242,62 @@ async function fetchJson(
         new AbortController();
 
     const timeoutId =
-        setTimeout(() => {
-            controller.abort();
-        }, timeout);
-
+        setTimeout(
+            function () {
+                controller.abort();
+            },
+            timeout
+        );
 
     try {
-
         const proxyUrl =
-            `${CLOUDFLARE_WORKER}/?url=${encodeURIComponent(url)}`;
+            CLOUDFLARE_WORKER +
+            '/?url=' +
+            encodeURIComponent(url);
 
+        const fetchOptions = {
+            method:
+                options.method || 'GET',
+
+            signal:
+                controller.signal,
+
+            headers: {
+                Accept:
+                    'application/json',
+
+                ...(options.headers || {})
+            }
+        };
+
+        if (
+            options.body !== undefined
+        ) {
+            fetchOptions.body =
+                options.body;
+        }
 
         const response =
             await fetch(
                 proxyUrl,
-                {
-                    ...options,
-
-                    signal:
-                        controller.signal,
-
-                    headers: {
-                        Accept:
-                            'application/json',
-
-                        ...(options.headers || {})
-                    }
-                }
+                fetchOptions
             );
-
 
         if (!response.ok) {
-
-            let details = '';
-
-            try {
-                details =
-                    await response.text();
-            } catch {
-                // Ignore response parsing errors.
-            }
-
-
             throw new Error(
-                `HTTP ${response.status}${
-                    details
-                        ? `: ${details}`
-                        : ''
-                }`
+                'HTTP ' +
+                response.status
             );
         }
-
 
         return await response.json();
 
     } catch (error) {
 
-        if (error?.name === 'AbortError') {
+        if (
+            error &&
+            error.name === 'AbortError'
+        ) {
             throw new Error(
                 'The Roblox request timed out. Please try again.'
             );
@@ -270,27 +306,24 @@ async function fetchJson(
         throw error;
 
     } finally {
-
         clearTimeout(timeoutId);
     }
 }
 
 
-// ------------------------------------------------------------
+// ============================================================
 // SAFE OPTIONAL API FETCH
-// ------------------------------------------------------------
+// ============================================================
 
 async function optionalFetch(
     url,
     options = {}
 ) {
     try {
-
         return await fetchJson(
             url,
             options
         );
-
     } catch (error) {
 
         console.warn(
@@ -304,9 +337,9 @@ async function optionalFetch(
 }
 
 
-// ------------------------------------------------------------
+// ============================================================
 // 3D AVATAR VIEWER
-// ------------------------------------------------------------
+// ============================================================
 
 function init3DViewer(imageUrl) {
 
@@ -315,15 +348,11 @@ function init3DViewer(imageUrl) {
             'canvasContainer'
         );
 
-
     if (!container) {
         return;
     }
 
-
-    // Destroy old renderer/canvas
     container.innerHTML = '';
-
 
     if (!window.THREE) {
 
@@ -334,10 +363,8 @@ function init3DViewer(imageUrl) {
         return;
     }
 
-
     scene =
         new THREE.Scene();
-
 
     camera =
         new THREE.PerspectiveCamera(
@@ -347,9 +374,7 @@ function init3DViewer(imageUrl) {
             1000
         );
 
-
     camera.position.z = 2.7;
-
 
     renderer =
         new THREE.WebGLRenderer({
@@ -357,12 +382,10 @@ function init3DViewer(imageUrl) {
             alpha: true
         });
 
-
     renderer.setSize(
         115,
         115
     );
-
 
     renderer.setPixelRatio(
         Math.min(
@@ -371,11 +394,9 @@ function init3DViewer(imageUrl) {
         )
     );
 
-
     container.appendChild(
         renderer.domElement
     );
-
 
     const geometry =
         new THREE.PlaneGeometry(
@@ -385,28 +406,19 @@ function init3DViewer(imageUrl) {
             32
         );
 
-
     avatarMesh = null;
-
 
     const textureLoader =
         new THREE.TextureLoader();
 
-
     textureLoader.crossOrigin =
         'anonymous';
-
 
     textureLoader.load(
 
         imageUrl,
 
-
-        // ----------------------------------------------------
-        // SUCCESS
-        // ----------------------------------------------------
-
-        (texture) => {
+        function (texture) {
 
             const material =
                 new THREE.MeshBasicMaterial({
@@ -415,78 +427,55 @@ function init3DViewer(imageUrl) {
                     side: THREE.DoubleSide
                 });
 
-
             avatarMesh =
                 new THREE.Mesh(
                     geometry,
                     material
                 );
 
-
             scene.add(
                 avatarMesh
             );
 
-
             currentRotationVelocity =
                 targetRotationVelocity;
-
 
             animate3D();
         },
 
-
-        // ----------------------------------------------------
-        // PROGRESS
-        // ----------------------------------------------------
-
         undefined,
 
-
-        // ----------------------------------------------------
-        // ERROR
-        // ----------------------------------------------------
-
-        () => {
+        function () {
 
             console.warn(
                 'Could not load Roblox avatar image.'
             );
-
 
             const material =
                 new THREE.MeshBasicMaterial({
                     color: 0x6366f1
                 });
 
-
             avatarMesh =
                 new THREE.Mesh(
                     geometry,
                     material
                 );
 
-
             scene.add(
                 avatarMesh
             );
-
 
             animate3D();
         }
     );
 
 
-    // --------------------------------------------------------
-    // Mouse controls
-    // --------------------------------------------------------
-
     container.addEventListener(
         'mousedown',
-        (event) => {
+        function (event) {
 
             isDragging = true;
-
 
             previousMousePosition = {
                 x: event.clientX,
@@ -496,21 +485,15 @@ function init3DViewer(imageUrl) {
     );
 
 
-    // --------------------------------------------------------
-    // Touch controls
-    // --------------------------------------------------------
-
     container.addEventListener(
         'touchstart',
-        (event) => {
+        function (event) {
 
             if (!event.touches.length) {
                 return;
             }
 
-
             isDragging = true;
-
 
             previousMousePosition = {
                 x: event.touches[0].clientX,
@@ -524,13 +507,13 @@ function init3DViewer(imageUrl) {
 }
 
 
-// ------------------------------------------------------------
+// ============================================================
 // GLOBAL MOUSE MOVEMENT
-// ------------------------------------------------------------
+// ============================================================
 
 window.addEventListener(
     'mousemove',
-    (event) => {
+    function (event) {
 
         if (
             !isDragging ||
@@ -539,28 +522,22 @@ window.addEventListener(
             return;
         }
 
-
         const deltaX =
             event.clientX -
             previousMousePosition.x;
-
 
         const deltaY =
             event.clientY -
             previousMousePosition.y;
 
-
         avatarMesh.rotation.y +=
             deltaX * 0.01;
-
 
         avatarMesh.rotation.x +=
             deltaY * 0.01;
 
-
         currentRotationVelocity =
             deltaX * 0.0005;
-
 
         previousMousePosition = {
             x: event.clientX,
@@ -572,19 +549,19 @@ window.addEventListener(
 
 window.addEventListener(
     'mouseup',
-    () => {
+    function () {
         isDragging = false;
     }
 );
 
 
-// ------------------------------------------------------------
+// ============================================================
 // GLOBAL TOUCH MOVEMENT
-// ------------------------------------------------------------
+// ============================================================
 
 window.addEventListener(
     'touchmove',
-    (event) => {
+    function (event) {
 
         if (
             !isDragging ||
@@ -593,33 +570,26 @@ window.addEventListener(
             return;
         }
 
-
         if (!event.touches.length) {
             return;
         }
-
 
         const deltaX =
             event.touches[0].clientX -
             previousMousePosition.x;
 
-
         const deltaY =
             event.touches[0].clientY -
             previousMousePosition.y;
 
-
         avatarMesh.rotation.y +=
             deltaX * 0.01;
-
 
         avatarMesh.rotation.x +=
             deltaY * 0.01;
 
-
         currentRotationVelocity =
             deltaX * 0.0005;
-
 
         previousMousePosition = {
             x: event.touches[0].clientX,
@@ -634,15 +604,15 @@ window.addEventListener(
 
 window.addEventListener(
     'touchend',
-    () => {
+    function () {
         isDragging = false;
     }
 );
 
 
-// ------------------------------------------------------------
+// ============================================================
 // 3D ANIMATION
-// ------------------------------------------------------------
+// ============================================================
 
 function animate3D() {
 
@@ -654,11 +624,9 @@ function animate3D() {
         return;
     }
 
-
     requestAnimationFrame(
         animate3D
     );
-
 
     if (
         avatarMesh &&
@@ -671,15 +639,12 @@ function animate3D() {
                 currentRotationVelocity
             ) * 0.05;
 
-
         avatarMesh.rotation.y +=
             currentRotationVelocity;
-
 
         avatarMesh.rotation.x *=
             0.95;
     }
-
 
     renderer.render(
         scene,
@@ -688,23 +653,22 @@ function animate3D() {
 }
 
 
-// ------------------------------------------------------------
+// ============================================================
 // FIND ROBLOX USER
-// ------------------------------------------------------------
+// ============================================================
 
 async function findRobloxUser(
     username
 ) {
 
     const url =
-        `https://users.roblox.com/v1/users/search` +
-        `?keyword=${encodeURIComponent(username)}` +
-        `&limit=10`;
-
+        'https://users.roblox.com/v1/users/search' +
+        '?keyword=' +
+        encodeURIComponent(username) +
+        '&limit=10';
 
     const data =
         await fetchJson(url);
-
 
     if (
         !data ||
@@ -714,30 +678,29 @@ async function findRobloxUser(
         return null;
     }
 
-
-    // Prefer exact username match.
     const exactMatch =
         data.data.find(
-            user =>
-                user.name &&
-                user.name.toLowerCase() ===
-                username.toLowerCase()
-        );
+            function (user) {
 
+                return (
+                    user.name &&
+                    user.name.toLowerCase() ===
+                    username.toLowerCase()
+                );
+            }
+        );
 
     if (exactMatch) {
         return exactMatch;
     }
 
-
-    // Otherwise use first Roblox search result.
     return data.data[0];
 }
 
 
-// ------------------------------------------------------------
+// ============================================================
 // FETCH PROFILE DATA
-// ------------------------------------------------------------
+// ============================================================
 
 async function fetchProfileData(
     userId
@@ -746,35 +709,49 @@ async function fetchProfileData(
     const urls = {
 
         profile:
-            `https://users.roblox.com/v1/users/${userId}`,
+            'https://users.roblox.com/v1/users/' +
+            userId,
 
         avatar:
-            `https://thumbnails.roblox.com/v1/users/avatar-headshot` +
-            `?userIds=${userId}` +
-            `&size=420x420` +
-            `&format=Png` +
-            `&isCircular=false`,
+            'https://thumbnails.roblox.com/v1/users/avatar-headshot' +
+            '?userIds=' +
+            userId +
+            '&size=420x420' +
+            '&format=Png' +
+            '&isCircular=false',
 
         followers:
-            `https://friends.roblox.com/v1/users/${userId}/followers/count`,
+            'https://friends.roblox.com/v1/users/' +
+            userId +
+            '/followers/count',
 
         friends:
-            `https://friends.roblox.com/v1/users/${userId}/friends/count`,
+            'https://friends.roblox.com/v1/users/' +
+            userId +
+            '/friends/count',
 
         usernameHistory:
-            `https://users.roblox.com/v1/users/${userId}/username-history`,
+            'https://users.roblox.com/v1/users/' +
+            userId +
+            '/username-history',
 
         avatarRig:
-            `https://avatar.roblox.com/v2/avatar/users/${userId}/avatar`,
+            'https://avatar.roblox.com/v2/avatar/users/' +
+            userId +
+            '/avatar',
 
         groups:
-            `https://groups.roblox.com/v1/users/${userId}/groups/roles`,
+            'https://groups.roblox.com/v1/users/' +
+            userId +
+            '/groups/roles',
 
         games:
-            `https://games.roblox.com/v1/users/${userId}/games?limit=6`,
+            'https://games.roblox.com/v1/users/' +
+            userId +
+            '/games?limit=6',
 
         presence:
-            `https://presence.roblox.com/v1/presence/users`
+            'https://presence.roblox.com/v1/presence/users'
     };
 
 
@@ -813,8 +790,6 @@ async function fetchProfileData(
                 urls.games
             ),
 
-
-            // Roblox presence uses POST.
             optionalFetch(
                 urls.presence,
                 {
@@ -836,24 +811,20 @@ async function fetchProfileData(
         ]);
 
 
-    const getResult =
-        (index) => {
+    function getResult(index) {
 
-            const result =
-                results[index];
+        const result =
+            results[index];
 
+        if (
+            result &&
+            result.status === 'fulfilled'
+        ) {
+            return result.value;
+        }
 
-            if (
-                result &&
-                result.status ===
-                    'fulfilled'
-            ) {
-                return result.value;
-            }
-
-
-            return null;
-        };
+        return null;
+    }
 
 
     return {
@@ -888,9 +859,9 @@ async function fetchProfileData(
 }
 
 
-// ------------------------------------------------------------
+// ============================================================
 // UPDATE IDENTITY
-// ------------------------------------------------------------
+// ============================================================
 
 function updateIdentity(
     user,
@@ -903,30 +874,25 @@ function updateIdentity(
         user?.name ||
         'Unknown';
 
-
     const username =
         profile?.name ||
         user?.name ||
         'Unknown';
-
 
     setText(
         'displayName',
         displayName
     );
 
-
     setText(
         'userName',
-        `@${username}`
+        '@' + username
     );
-
 
     const badgeEl =
         document.getElementById(
             'verifiedBadge'
         );
-
 
     if (badgeEl) {
 
@@ -938,9 +904,9 @@ function updateIdentity(
 }
 
 
-// ------------------------------------------------------------
+// ============================================================
 // UPDATE AVATAR
-// ------------------------------------------------------------
+// ============================================================
 
 function updateAvatar(
     avatar
@@ -948,7 +914,6 @@ function updateAvatar(
 
     let avatarUrl =
         'https://tr.rbxcdn.com/30day-avatar/420/420/AvatarHeadshot/Png';
-
 
     if (
         avatar &&
@@ -961,16 +926,15 @@ function updateAvatar(
             avatar.data[0].imageUrl;
     }
 
-
     init3DViewer(
         avatarUrl
     );
 }
 
 
-// ------------------------------------------------------------
+// ============================================================
 // UPDATE STATS
-// ------------------------------------------------------------
+// ============================================================
 
 function updateStats(
     data
@@ -983,34 +947,25 @@ function updateStats(
         )
     );
 
-
     setText(
         'followersCount',
 
-        data.followers?.count !==
-        undefined
-
+        data.followers?.count !== undefined
             ? formatNumber(
                 data.followers.count
             )
-
             : 'N/A'
     );
-
 
     setText(
         'friendsCount',
 
-        data.friends?.count !==
-        undefined
-
+        data.friends?.count !== undefined
             ? formatNumber(
                 data.friends.count
             )
-
             : 'N/A'
     );
-
 
     setText(
         'rigType',
@@ -1021,9 +976,9 @@ function updateStats(
 }
 
 
-// ------------------------------------------------------------
+// ============================================================
 // UPDATE PRESENCE
-// ------------------------------------------------------------
+// ============================================================
 
 function updatePresence(
     presenceData
@@ -1034,20 +989,16 @@ function updatePresence(
             'onlineStatus'
         );
 
-
     const lastOnlineElement =
         document.getElementById(
             'lastOnline'
         );
 
-
     if (!statusElement) {
         return;
     }
 
-
     let presence = null;
-
 
     if (
         presenceData &&
@@ -1061,16 +1012,13 @@ function updatePresence(
             presenceData.userPresences[0];
     }
 
-
     if (!presence) {
 
         statusElement.textContent =
             'UNKNOWN';
 
-
         statusElement.className =
             'status-pill';
-
 
         if (lastOnlineElement) {
 
@@ -1078,19 +1026,8 @@ function updatePresence(
                 'Status unavailable';
         }
 
-
         return;
     }
-
-
-    /*
-        Roblox presenceType:
-
-        0 = Offline
-        1 = Online
-        2 = In Game
-        3 = In Studio
-    */
 
 
     const presenceType =
@@ -1126,9 +1063,7 @@ function updatePresence(
 
     statusElement.className =
         presenceType === 0
-
             ? 'status-pill'
-
             : 'status-pill online';
 
 
@@ -1143,18 +1078,16 @@ function updatePresence(
 
             lastOnlineElement.textContent =
                 statusText === 'OFFLINE'
-
                     ? 'Currently offline'
-
                     : 'Active';
         }
     }
 }
 
 
-// ------------------------------------------------------------
+// ============================================================
 // UPDATE USERNAME HISTORY
-// ------------------------------------------------------------
+// ============================================================
 
 function updateUsernameHistory(
     history
@@ -1165,11 +1098,9 @@ function updateUsernameHistory(
             'pastUsernames'
         );
 
-
     if (!container) {
         return;
     }
-
 
     if (
         history &&
@@ -1179,14 +1110,16 @@ function updateUsernameHistory(
 
         container.innerHTML =
             history.data
-                .map(item => {
+                .map(
+                    function (item) {
 
-                    return `
-                        <span class="tag">
-                            ${escapeHtml(item.name)}
-                        </span>
-                    `;
-                })
+                        return `
+                            <span class="tag">
+                                ${escapeHtml(item.name)}
+                            </span>
+                        `;
+                    }
+                )
                 .join('');
 
     } else {
@@ -1197,9 +1130,9 @@ function updateUsernameHistory(
 }
 
 
-// ------------------------------------------------------------
+// ============================================================
 // UPDATE GROUPS
-// ------------------------------------------------------------
+// ============================================================
 
 function updateGroups(
     groups
@@ -1210,11 +1143,9 @@ function updateGroups(
             'groupsList'
         );
 
-
     if (!container) {
         return;
     }
-
 
     if (
         groups &&
@@ -1225,27 +1156,27 @@ function updateGroups(
         container.innerHTML =
             groups.data
                 .slice(0, 4)
-                .map(groupData => {
+                .map(
+                    function (groupData) {
 
-                    const groupName =
-                        groupData?.group?.name ||
-                        'Unknown group';
+                        const groupName =
+                            groupData?.group?.name ||
+                            'Unknown group';
 
+                        const roleName =
+                            groupData?.role?.name ||
+                            'Unknown role';
 
-                    const roleName =
-                        groupData?.role?.name ||
-                        'Unknown role';
-
-
-                    return `
-                        <span
-                            class="tag"
-                            title="${escapeHtml(roleName)}"
-                        >
-                            ${escapeHtml(groupName)}
-                        </span>
-                    `;
-                })
+                        return `
+                            <span
+                                class="tag"
+                                title="${escapeHtml(roleName)}"
+                            >
+                                ${escapeHtml(groupName)}
+                            </span>
+                        `;
+                    }
+                )
                 .join('');
 
     } else {
@@ -1256,9 +1187,9 @@ function updateGroups(
 }
 
 
-// ------------------------------------------------------------
+// ============================================================
 // UPDATE EXPERIENCES
-// ------------------------------------------------------------
+// ============================================================
 
 function updateGames(
     games
@@ -1269,17 +1200,14 @@ function updateGames(
             'gamesContainer'
         );
 
-
     const visitsElement =
         document.getElementById(
             'placeVisits'
         );
 
-
     if (!container) {
         return;
     }
-
 
     if (
         !games ||
@@ -1290,13 +1218,10 @@ function updateGames(
         container.innerHTML =
             '<span class="empty-hint">No public experiences found</span>';
 
-
         if (visitsElement) {
-
             visitsElement.textContent =
                 'N/A';
         }
-
 
         return;
     }
@@ -1307,36 +1232,35 @@ function updateGames(
 
     container.innerHTML =
         games.data
-            .map(game => {
+            .map(
+                function (game) {
 
-                const gameName =
-                    game?.name ||
-                    'Unnamed experience';
+                    const gameName =
+                        game?.name ||
+                        'Unnamed experience';
 
+                    const visits =
+                        Number(
+                            game?.placeVisits
+                        ) || 0;
 
-                const visits =
-                    Number(
-                        game?.placeVisits
-                    ) || 0;
+                    totalVisits +=
+                        visits;
 
+                    return `
+                        <div class="exp-card">
+                            <h4>
+                                ${escapeHtml(gameName)}
+                            </h4>
 
-                totalVisits +=
-                    visits;
-
-
-                return `
-                    <div class="exp-card">
-                        <h4>
-                            ${escapeHtml(gameName)}
-                        </h4>
-
-                        <p>
-                            Visits:
-                            ${formatNumber(visits)}
-                        </p>
-                    </div>
-                `;
-            })
+                            <p>
+                                Visits:
+                                ${formatNumber(visits)}
+                            </p>
+                        </div>
+                    `;
+                }
+            )
             .join('');
 
 
@@ -1350,9 +1274,9 @@ function updateGames(
 }
 
 
-// ------------------------------------------------------------
+// ============================================================
 // MAIN SEARCH
-// ------------------------------------------------------------
+// ============================================================
 
 async function performSearch() {
 
@@ -1371,8 +1295,6 @@ async function performSearch() {
     }
 
 
-    // Prevent older requests from
-    // overwriting newer searches.
     const requestId =
         ++currentRequestId;
 
@@ -1384,18 +1306,15 @@ async function performSearch() {
     showProfile(false);
 
 
-    // Disable button while searching.
     if (searchBtn) {
-
-        searchBtn.disabled =
-            true;
+        searchBtn.disabled = true;
     }
 
 
     try {
 
         // ----------------------------------------------------
-        // STEP 1 — Find user
+        // STEP 1 - FIND USER
         // ----------------------------------------------------
 
         let user;
@@ -1415,15 +1334,12 @@ async function performSearch() {
                 error
             );
 
-
             throw new Error(
                 'Roblox search is temporarily unavailable. Please try again in a moment.'
             );
         }
 
 
-        // If another request started,
-        // stop this one.
         if (
             requestId !==
             currentRequestId
@@ -1435,7 +1351,9 @@ async function performSearch() {
         if (!user) {
 
             throw new Error(
-                `No Roblox user named "${username}" was found.`
+                'No Roblox user named "' +
+                username +
+                '" was found.'
             );
         }
 
@@ -1445,7 +1363,7 @@ async function performSearch() {
 
 
         // ----------------------------------------------------
-        // STEP 2 — Fetch profile information
+        // STEP 2 - FETCH PROFILE
         // ----------------------------------------------------
 
         const data =
@@ -1463,7 +1381,7 @@ async function performSearch() {
 
 
         // ----------------------------------------------------
-        // STEP 3 — Populate UI
+        // STEP 3 - UPDATE UI
         // ----------------------------------------------------
 
         updateIdentity(
@@ -1471,31 +1389,25 @@ async function performSearch() {
             data.profile
         );
 
-
         updateAvatar(
             data.avatar
         );
-
 
         updateStats(
             data
         );
 
-
         updatePresence(
             data.presence
         );
-
 
         updateUsernameHistory(
             data.usernameHistory
         );
 
-
         updateGroups(
             data.groups
         );
-
 
         updateGames(
             data.games
@@ -1503,13 +1415,12 @@ async function performSearch() {
 
 
         // ----------------------------------------------------
-        // STEP 4 — Show profile
+        // STEP 4 - SHOW PROFILE
         // ----------------------------------------------------
 
         showProfile(true);
 
 
-        // Some secondary APIs may fail independently.
         const successfulRequests = [
 
             data.profile,
@@ -1522,7 +1433,9 @@ async function performSearch() {
             data.games,
             data.presence
 
-        ].filter(Boolean).length;
+        ].filter(
+            Boolean
+        ).length;
 
 
         if (
@@ -1573,7 +1486,6 @@ async function performSearch() {
 
 
             if (searchBtn) {
-
                 searchBtn.disabled =
                     false;
             }
@@ -1582,9 +1494,9 @@ async function performSearch() {
 }
 
 
-// ------------------------------------------------------------
-// OPTIONAL: SEARCH WHEN PAGE LOADS WITH ?user=username
-// ------------------------------------------------------------
+// ============================================================
+// URL SEARCH
+// ============================================================
 
 function loadUsernameFromUrl() {
 
@@ -1608,10 +1520,8 @@ function loadUsernameFromUrl() {
             usernameInput.value =
                 username;
 
-
             performSearch();
         }
-
 
     } catch (error) {
 
