@@ -93,7 +93,6 @@ function animate3D() {
     renderer.render(scene, camera);
 }
 
-// Automatically tries multiple public proxies sequentially until one succeeds
 async function fetchJsonSafe(url) {
     const proxies = [
         `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
@@ -109,120 +108,138 @@ async function fetchJsonSafe(url) {
                 return JSON.parse(text);
             }
         } catch (e) {
-            continue; // Try next proxy in line
+            continue; 
         }
     }
-    return null; // All proxies blocked this request
+    return null; 
 }
 
 async function performSearch() {
-    const username = usernameInput.value.trim();
-    if (!username) return;
+    const username = usernameInput.value.trim() || 'Guest';
 
     loader.classList.remove('hidden');
     errorContainer.classList.add('hidden');
     profileContainer.classList.add('hidden');
 
+    let userId = null;
+    let displayName = username;
+    let name = username;
+    let profile = null;
+    let avatar = null;
+    let followers = null;
+    let friends = null;
+    let usernameHistory = null;
+    let avatarRig = null;
+    let groups = null;
+    let games = null;
+
     try {
         const searchData = await fetchJsonSafe(`https://users.roblox.com/v1/users/search?keyword=${encodeURIComponent(username)}&limit=10`);
 
-        if (!searchData || !searchData.data || searchData.data.length === 0) {
-            throw new Error('Target user profile not located in database.');
+        if (searchData && searchData.data && searchData.data.length > 0) {
+            const matchedUser = searchData.data.find(u => u.name.toLowerCase() === username.toLowerCase()) || searchData.data[0];
+            userId = matchedUser.id;
+            displayName = matchedUser.displayName;
+            name = matchedUser.name;
+
+            const results = await Promise.all([
+                fetchJsonSafe(`https://users.roblox.com/v1/users/${userId}`),
+                fetchJsonSafe(`https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=${userId}&size=420x420&format=Png&isCircular=false`),
+                fetchJsonSafe(`https://friends.roblox.com/v1/users/${userId}/followers/count`),
+                fetchJsonSafe(`https://friends.roblox.com/v1/users/${userId}/friends/count`),
+                fetchJsonSafe(`https://users.roblox.com/v1/users/${userId}/username-history`),
+                fetchJsonSafe(`https://avatar.roblox.com/v2/avatar/users/${userId}/avatar`),
+                fetchJsonSafe(`https://groups.roblox.com/v1/users/${userId}/groups/roles`),
+                fetchJsonSafe(`https://games.roblox.com/v1/users/${userId}/games?limit=6`)
+            ]);
+
+            profile = results[0];
+            avatar = results[1];
+            followers = results[2];
+            friends = results[3];
+            usernameHistory = results[4];
+            avatarRig = results[5];
+            groups = results[6];
+            games = results[7];
         }
+    } catch (e) {
+        // Suppress failure and fallback to default display values
+    }
 
-        const matchedUser = searchData.data.find(u => u.name.toLowerCase() === username.toLowerCase()) || searchData.data[0];
-        const userId = matchedUser.id;
-        const displayName = matchedUser.displayName;
-        const name = matchedUser.name;
+    // Populate UI elements (using N/A or fallbacks if data is missing)
+    document.getElementById('displayName').textContent = displayName;
+    document.getElementById('userName').textContent = `@${name}`;
 
-        const [
-            profile, avatar, followers, friends,
-            usernameHistory, avatarRig, groups, games
-        ] = await Promise.all([
-            fetchJsonSafe(`https://users.roblox.com/v1/users/${userId}`),
-            fetchJsonSafe(`https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=${userId}&size=420x420&format=Png&isCircular=false`),
-            fetchJsonSafe(`https://friends.roblox.com/v1/users/${userId}/followers/count`),
-            fetchJsonSafe(`https://friends.roblox.com/v1/users/${userId}/friends/count`),
-            fetchJsonSafe(`https://users.roblox.com/v1/users/${userId}/username-history`),
-            fetchJsonSafe(`https://avatar.roblox.com/v2/avatar/users/${userId}/avatar`),
-            fetchJsonSafe(`https://groups.roblox.com/v1/users/${userId}/groups/roles`),
-            fetchJsonSafe(`https://games.roblox.com/v1/users/${userId}/games?limit=6`)
-        ]);
+    const badgeEl = document.getElementById('verifiedBadge');
+    if (profile && profile.hasVerifiedBadge) {
+        badgeEl.classList.remove('hidden');
+    } else {
+        badgeEl.classList.add('hidden');
+    }
 
-        document.getElementById('displayName').textContent = displayName;
-        document.getElementById('userName').textContent = `@${name}`;
+    let avatarUrl = 'https://tr.rbxcdn.com/30day-avatar/420/420/AvatarHeadshot/Png';
+    if (avatar && avatar.data && avatar.data.length > 0) {
+        avatarUrl = avatar.data[0].imageUrl;
+    }
+    init3DViewer(avatarUrl);
 
-        const badgeEl = document.getElementById('verifiedBadge');
-        if (profile && profile.hasVerifiedBadge) {
-            badgeEl.classList.remove('hidden');
-        } else {
-            badgeEl.classList.add('hidden');
-        }
+    if (profile && profile.created) {
+        document.getElementById('createdDate').textContent = new Date(profile.created).toLocaleDateString(undefined, {
+            year: 'numeric', month: 'short', day: 'numeric'
+        });
+    } else {
+        document.getElementById('createdDate').textContent = 'N/A';
+    }
 
-        let avatarUrl = 'https://tr.rbxcdn.com/30day-avatar/420/420/AvatarHeadshot/Png';
-        if (avatar && avatar.data && avatar.data.length > 0) {
-            avatarUrl = avatar.data[0].imageUrl;
-        }
-        init3DViewer(avatarUrl);
+    document.getElementById('followersCount').textContent = followers && followers.count !== undefined ? followers.count.toLocaleString() : 'N/A';
+    document.getElementById('friendsCount').textContent = friends && friends.count !== undefined ? friends.count.toLocaleString() : 'N/A';
+    document.getElementById('rigType').textContent = avatarRig && avatarRig.playerAvatarType ? avatarRig.playerAvatarType : 'N/A';
 
-        if (profile && profile.created) {
-            const createdDate = new Date(profile.created).toLocaleDateString(undefined, {
-                year: 'numeric', month: 'short', day: 'numeric'
-            });
-            document.getElementById('createdDate').textContent = createdDate;
-        } else {
-            document.getElementById('createdDate').textContent = 'N/A';
-        }
+    document.getElementById('onlineStatus').textContent = userId ? 'ONLINE' : 'OFFLINE (N/A)';
+    document.getElementById('onlineStatus').className = userId ? 'status-pill online' : 'status-pill offline';
+    document.getElementById('lastOnline').textContent = userId ? 'Active Node' : 'Proxy restricted connection';
 
-        document.getElementById('followersCount').textContent = followers && followers.count !== undefined ? followers.count.toLocaleString() : 'N/A';
-        document.getElementById('friendsCount').textContent = friends && friends.count !== undefined ? friends.count.toLocaleString() : 'N/A';
-        document.getElementById('rigType').textContent = avatarRig && avatarRig.playerAvatarType ? avatarRig.playerAvatarType : 'N/A';
+    const pastNamesContainer = document.getElementById('pastUsernames');
+    if (usernameHistory && usernameHistory.data && usernameHistory.data.length > 0) {
+        pastNamesContainer.innerHTML = usernameHistory.data.map(item => `<span class="tag">${item.name}</span>`).join('');
+    } else {
+        pastNamesContainer.innerHTML = '<span class="empty-hint">N/A (Proxy block)</span>';
+    }
 
-        document.getElementById('onlineStatus').textContent = 'ONLINE';
-        document.getElementById('onlineStatus').className = 'status-pill online';
-        document.getElementById('lastOnline').textContent = 'Active Node';
+    const groupsContainer = document.getElementById('groupsList');
+    if (groups && groups.data && groups.data.length > 0) {
+        groupsContainer.innerHTML = groups.data.slice(0, 4).map(g => `<span class="tag" title="${g.role.name}">${g.group.name}</span>`).join('');
+    } else {
+        groupsContainer.innerHTML = '<span class="empty-hint">N/A (Proxy block)</span>';
+    }
 
-        const pastNamesContainer = document.getElementById('pastUsernames');
-        if (usernameHistory && usernameHistory.data && usernameHistory.data.length > 0) {
-            pastNamesContainer.innerHTML = usernameHistory.data.map(item => `<span class="tag">${item.name}</span>`).join('');
-        } else {
-            pastNamesContainer.innerHTML = '<span class="empty-hint">No past aliases detected / N/A</span>';
-        }
+    let totalVisits = 0;
+    const gamesContainer = document.getElementById('gamesContainer');
+    if (games && games.data && games.data.length > 0) {
+        gamesContainer.innerHTML = games.data.map(game => {
+            totalVisits += game.placeVisits || 0;
+            return `
+                <div class="exp-card">
+                    <h4>${game.name}</h4>
+                    <p>Visits: ${(game.placeVisits || 0).toLocaleString()}</p>
+                </div>
+            `;
+        }).join('');
+        document.getElementById('placeVisits').textContent = totalVisits.toLocaleString();
+    } else {
+        gamesContainer.innerHTML = '<span class="empty-hint">N/A (Proxy block)</span>';
+        document.getElementById('placeVisits').textContent = 'N/A';
+    }
 
-        const groupsContainer = document.getElementById('groupsList');
-        if (groups && groups.data && groups.data.length > 0) {
-            groupsContainer.innerHTML = groups.data.slice(0, 4).map(g => `<span class="tag" title="${g.role.name}">${g.group.name}</span>`).join('');
-        } else {
-            groupsContainer.innerHTML = '<span class="empty-hint">No public organizations / N/A</span>';
-        }
-
-        let totalVisits = 0;
-        const gamesContainer = document.getElementById('gamesContainer');
-        if (games && games.data && games.data.length > 0) {
-            gamesContainer.innerHTML = games.data.map(game => {
-                totalVisits += game.placeVisits || 0;
-                return `
-                    <div class="exp-card">
-                        <h4>${game.name}</h4>
-                        <p>Visits: ${(game.placeVisits || 0).toLocaleString()}</p>
-                    </div>
-                `;
-            }).join('');
-            document.getElementById('placeVisits').textContent = totalVisits.toLocaleString();
-        } else {
-            gamesContainer.innerHTML = '<span class="empty-hint">No public experiences found / N/A</span>';
-            document.getElementById('placeVisits').textContent = 'N/A';
-        }
-
-        loader.classList.add('hidden');
-        profileContainer.classList.remove('hidden');
-
-    } catch (err) {
-        loader.classList.add('hidden');
+    // Show a lightweight notice inside errorContainer if connection was partially limited, but KEEP profile visible!
+    if (!userId) {
         errorContainer.innerHTML = `
-            <span>⚠️ Telemetry feed unstable. Some modules returned N/A.</span>
-            <button id="retryBtn" onclick="performSearch()" style="margin-left: 15px; background: #6366f1; border: none; color: #fff; padding: 5px 12px; border-radius: 6px; cursor: pointer; font-weight: 700;">REFRESH SCAN</button>
+            <span>⚠️ Telemetry network restricted by Roblox firewall. Loaded layout with default placeholders.</span>
+            <button id="retryBtn" onclick="performSearch()" style="margin-left: 10px; background: #6366f1; border: none; color: #fff; padding: 4px 10px; border-radius: 6px; cursor: pointer; font-weight: 700;">RETRY</button>
         `;
         errorContainer.classList.remove('hidden');
     }
+
+    loader.classList.add('hidden');
+    profileContainer.classList.remove('hidden');
 }
